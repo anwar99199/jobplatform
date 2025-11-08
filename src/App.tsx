@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { HomePage } from "./pages/HomePage";
+import { PremiumPage } from "./pages/PremiumPage";
 import { CareerPathPage } from "./pages/CareerPathPage";
 import { NewsPage } from "./pages/NewsPage";
 import { ScholarshipsPage } from "./pages/ScholarshipsPage";
@@ -8,11 +9,14 @@ import { TrainingPage } from "./pages/TrainingPage";
 import { CompanyJobsPage } from "./pages/CompanyJobsPage";
 import { GovernmentJobsPage } from "./pages/GovernmentJobsPage";
 import { JobDetailsPage } from "./pages/JobDetailsPage";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
 import { AdminRegisterPage } from "./pages/admin/AdminRegisterPage";
 import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
 import { AdminJobsPage } from "./pages/admin/AdminJobsPage";
 import { AdminJobFormPage } from "./pages/admin/AdminJobFormPage";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export default function App() {
   return (
@@ -22,14 +26,23 @@ export default function App() {
           {/* Public Routes */}
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
-            <Route path="/career-path" element={<CareerPathPage />} />
-            <Route path="/news" element={<NewsPage />} />
-            <Route path="/scholarships" element={<ScholarshipsPage />} />
-            <Route path="/training" element={<TrainingPage />} />
-            <Route path="/company-jobs" element={<CompanyJobsPage />} />
-            <Route path="/government-jobs" element={<GovernmentJobsPage />} />
-            <Route path="/job/:id" element={<JobDetailsPage />} />
+            <Route path="premium" element={
+              <ProtectedRoute>
+                <PremiumPage />
+              </ProtectedRoute>
+            } />
+            <Route path="career-path" element={<CareerPathPage />} />
+            <Route path="news" element={<NewsPage />} />
+            <Route path="scholarships" element={<ScholarshipsPage />} />
+            <Route path="training" element={<TrainingPage />} />
+            <Route path="company-jobs" element={<CompanyJobsPage />} />
+            <Route path="government-jobs" element={<GovernmentJobsPage />} />
+            <Route path="job/:id" element={<JobDetailsPage />} />
           </Route>
+
+          {/* User Auth Routes */}
+          <Route path="login" element={<LoginPage />} />
+          <Route path="register" element={<RegisterPage />} />
 
           {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLoginPage />} />

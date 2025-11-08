@@ -1,12 +1,36 @@
-import { Menu, Facebook, Instagram, Twitter, Youtube } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Menu, Facebook, Instagram, Twitter, Youtube, User, LogOut } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if user is logged in
+    const userToken = localStorage.getItem("userToken");
+    const userData = localStorage.getItem("user");
+    
+    if (userToken && userData) {
+      try {
+        setUser(JSON.parse(userData));
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("userToken");
+    localStorage.removeItem("user");
+    setUser(null);
+    navigate("/");
+  };
 
   const navItems = [
     { title: "الرئيسية", path: "/" },
+    { title: "خدمات Premium", path: "/premium" },
     { title: "المسار الوظيفي", path: "/career-path" },
     { title: "أهتم بالأخبار", path: "/news" },
     { title: "المنح الدراسية المجانية", path: "/scholarships" },
@@ -21,12 +45,35 @@ export function Header() {
       <div className="bg-red-600 text-white py-2 px-4 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Menu className="w-5 h-5 cursor-pointer" />
-          <span>إنشاء حساب</span>
-          <span className="mx-2">|</span>
-          <span>تسجيل الدخول</span>
+          {user ? (
+            <>
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                <span>{user.user_metadata?.name || user.email}</span>
+              </div>
+              <span className="mx-2">|</span>
+              <button
+                onClick={handleLogout}
+                className="hover:text-gray-200 transition-colors flex items-center gap-1"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>تسجيل الخروج</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/register" className="hover:text-gray-200 transition-colors">
+                إنشاء حساب
+              </Link>
+              <span className="mx-2">|</span>
+              <Link to="/login" className="hover:text-gray-200 transition-colors">
+                تسجيل الدخول
+              </Link>
+            </>
+          )}
         </div>
         <div>
-          <span>نشر إعلانك عملاً</span>
+          <span>انشر إعلانك معنا</span>
         </div>
       </div>
 

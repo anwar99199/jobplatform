@@ -307,10 +307,13 @@ app.post("/make-server-8a20c00b/signup", async (c) => {
   try {
     const { email, password, name } = await c.req.json();
     
+    console.log("Signup request received:", { email, name });
+    
     if (!email || !password || !name) {
       return c.json({ success: false, error: "Email, password, and name are required" }, 400);
     }
     
+    // Create user in Supabase Auth
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -320,13 +323,72 @@ app.post("/make-server-8a20c00b/signup", async (c) => {
     });
     
     if (error) {
-      console.error("Error during sign up:", error);
-      return c.json({ success: false, error: error.message }, 400);
+      console.error("Error during sign up in Supabase Auth:", error);
+      console.error("Error details:", JSON.stringify(error));
+      
+      // رسائل خطأ واضحة بالعربية
+      let errorMessage = "حدث خطأ أثناء إنشاء الحساب";
+      
+      // التحقق من نوع الخطأ باستخدام error.code
+      if (error.code === "email_exists" || 
+          error.message?.includes("already registered") || 
+          error.message?.includes("already exists")) {
+        errorMessage = "هذا البريد الإلكتروني مسجل بالفعل. يرجى تسجيل الدخول أو استخدام بريد آخر";
+      } else if (error.message?.includes("invalid email") || error.code === "invalid_email") {
+        errorMessage = "البريد الإلكتروني غير صالح";
+      } else if (error.message?.includes("password") || error.code === "weak_password") {
+        errorMessage = "كلمة المرور ضعيفة جداً (يجب أن تكون 6 أحرف على الأقل)";
+      }
+      
+      return c.json({ success: false, error: errorMessage, code: error.code }, 400);
     }
+    
+    console.log("User created successfully in Supabase Auth:", data.user.id);
+    
+    // Store additional user profile in KV store
+    const userProfile = {
+      id: data.user.id,
+      email: email,
+      name: name,
+      createdAt: new Date().toISOString(),
+      role: "user"
+    };
+    
+    await kv.set(`user_profile:${data.user.id}`, userProfile);
+    console.log("User profile stored in KV store");
     
     return c.json({ success: true, user: data.user });
   } catch (error) {
     console.error("Error during sign up:", error);
+    console.error("Error stack:", error.stack);
+    return c.json({ success: false, error: "حدث خطأ في الخادم", details: String(error) }, 500);
+  }
+});
+
+// Get user profile
+app.get("/make-server-8a20c00b/user/profile/:userId", async (c) => {
+  try {
+    const userId = c.req.param("userId");
+    const profile = await kv.get(`user_profile:${userId}`);
+    
+    if (!profile) {
+      return c.json({ success: false, error: "Profile not found" }, 404);
+    }
+    
+    return c.json({ success: true, profile });
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Get all users (admin only)
+app.get("/make-server-8a20c00b/admin/users", async (c) => {
+  try {
+    const profiles = await kv.getByPrefix("user_profile:");
+    return c.json({ success: true, users: profiles });
+  } catch (error) {
+    console.error("Error fetching users:", error);
     return c.json({ success: false, error: String(error) }, 500);
   }
 });

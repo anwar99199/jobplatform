@@ -12,6 +12,7 @@ interface Job {
   location?: string;
   type?: string;
   description?: string;
+  applicationUrl?: string;
 }
 
 export function JobDetailsPage() {
@@ -158,12 +159,28 @@ export function JobDetailsPage() {
           <p className="mb-6 text-red-50">
             قدم طلبك الآن وكن جزءاً من فريق العمل المتميز
           </p>
-          <Button 
-            className="bg-white text-red-600 hover:bg-gray-100 px-8 py-6 text-lg flex items-center gap-2 mx-auto"
-          >
-            <Send className="w-5 h-5" />
-            <span>تقديم الطلب</span>
-          </Button>
+          {job.applicationUrl ? (
+            <a 
+              href={job.applicationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button 
+                className="bg-white text-red-600 hover:bg-gray-100 px-8 py-6 text-lg flex items-center gap-2 mx-auto"
+              >
+                <Send className="w-5 h-5" />
+                <span>تقديم الطلب</span>
+              </Button>
+            </a>
+          ) : (
+            <Button 
+              className="bg-white text-red-600 hover:bg-gray-100 px-8 py-6 text-lg flex items-center gap-2 mx-auto opacity-50 cursor-not-allowed"
+              disabled
+            >
+              <Send className="w-5 h-5" />
+              <span>رابط التقديم غير متوفر</span>
+            </Button>
+          )}
         </div>
 
         {/* Tips Section */}

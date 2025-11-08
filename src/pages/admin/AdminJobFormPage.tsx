@@ -19,6 +19,7 @@ export function AdminJobFormPage() {
     location: "",
     type: "",
     description: "",
+    applicationUrl: "",
     date: new Date().toISOString().split('T')[0]
   });
 
@@ -45,6 +46,7 @@ export function AdminJobFormPage() {
           location: response.job.location || "",
           type: response.job.type || "",
           description: response.job.description || "",
+          applicationUrl: response.job.applicationUrl || "",
           date: response.job.date || new Date().toISOString().split('T')[0]
         });
       }
@@ -174,6 +176,24 @@ export function AdminJobFormPage() {
                 onChange={handleChange}
                 dir="ltr"
               />
+            </div>
+
+            {/* Application URL */}
+            <div className="space-y-2">
+              <Label htmlFor="applicationUrl">رابط التقديم *</Label>
+              <Input
+                id="applicationUrl"
+                name="applicationUrl"
+                type="url"
+                value={formData.applicationUrl}
+                onChange={handleChange}
+                placeholder="https://example.com/apply"
+                dir="ltr"
+                required
+              />
+              <p className="text-xs text-gray-500">
+                الرابط الذي سيتم توجيه المتقدمين إليه عند الضغط على زر "تقديم الطلب"
+              </p>
             </div>
 
             {/* Description */}
