@@ -7,12 +7,19 @@ import { ScholarshipsPage } from "./pages/ScholarshipsPage";
 import { TrainingPage } from "./pages/TrainingPage";
 import { CompanyJobsPage } from "./pages/CompanyJobsPage";
 import { GovernmentJobsPage } from "./pages/GovernmentJobsPage";
+import { JobDetailsPage } from "./pages/JobDetailsPage";
+import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
+import { AdminRegisterPage } from "./pages/admin/AdminRegisterPage";
+import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
+import { AdminJobsPage } from "./pages/admin/AdminJobsPage";
+import { AdminJobFormPage } from "./pages/admin/AdminJobFormPage";
 
 export default function App() {
   return (
     <Router>
       <div className="min-h-screen bg-gray-50" dir="rtl">
         <Routes>
+          {/* Public Routes */}
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="/career-path" element={<CareerPathPage />} />
@@ -21,9 +28,18 @@ export default function App() {
             <Route path="/training" element={<TrainingPage />} />
             <Route path="/company-jobs" element={<CompanyJobsPage />} />
             <Route path="/government-jobs" element={<GovernmentJobsPage />} />
-            {/* Catch all unmatched routes and redirect to home */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="/job/:id" element={<JobDetailsPage />} />
           </Route>
+
+          {/* Admin Routes */}
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/admin/register" element={<AdminRegisterPage />} />
+          <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+          <Route path="/admin/jobs" element={<AdminJobsPage />} />
+          <Route path="/admin/jobs/:id" element={<AdminJobFormPage />} />
+          
+          {/* Catch all unmatched routes and redirect to home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </Router>

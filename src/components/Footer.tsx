@@ -82,6 +82,10 @@ export function Footer() {
             <a href="#" className="text-blue-400 hover:underline mx-1">
               سياسة الخصوصية
             </a>
+            <span className="mx-2">-</span>
+            <Link to="/admin/login" className="text-gray-600 hover:text-red-400 transition-colors mx-1">
+              •
+            </Link>
           </p>
         </div>
       </div>

@@ -1,6 +1,8 @@
-import { Calendar } from "lucide-react";
+import { Calendar, ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getJobs } from "../utils/api";
+import { Button } from "./ui/button";
 
 interface Job {
   id: string;
@@ -13,6 +15,7 @@ interface Job {
 }
 
 export function JobsSection() {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +39,10 @@ export function JobsSection() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewDetails = (jobId: string) => {
+    navigate(`/job/${jobId}`);
   };
 
   if (loading) {
@@ -72,28 +79,38 @@ export function JobsSection() {
           {jobs.map((job) => (
             <div
               key={job.id}
-              className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow bg-gray-50 flex items-start gap-4 cursor-pointer"
+              className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow bg-gray-50 flex flex-col gap-4"
             >
-              <div className="flex-1">
-                <h3 className="text-red-600 mb-3 leading-relaxed">
-                  {job.title}
-                </h3>
-                {job.company && (
-                  <p className="text-gray-700 mb-2">{job.company}</p>
-                )}
-                {job.location && (
-                  <p className="text-gray-600 text-sm mb-2">📍 {job.location}</p>
-                )}
-                <div className="flex items-center gap-2 text-gray-600 text-sm">
-                  <Calendar className="w-4 h-4" />
-                  <span>{job.date}</span>
+              <div className="flex items-start gap-4">
+                <div className="flex-1">
+                  <h3 className="text-red-600 mb-3 leading-relaxed">
+                    {job.title}
+                  </h3>
+                  {job.company && (
+                    <p className="text-gray-700 mb-2">{job.company}</p>
+                  )}
+                  {job.location && (
+                    <p className="text-gray-600 text-sm mb-2">📍 {job.location}</p>
+                  )}
+                  <div className="flex items-center gap-2 text-gray-600 text-sm">
+                    <Calendar className="w-4 h-4" />
+                    <span>{job.date}</span>
+                  </div>
+                </div>
+                <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="10"/>
+                  </svg>
                 </div>
               </div>
-              <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
-                <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="12" cy="12" r="10"/>
-                </svg>
-              </div>
+              
+              <Button 
+                onClick={() => handleViewDetails(job.id)}
+                className="w-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center gap-2"
+              >
+                <span>التفاصيل والتقديم</span>
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
             </div>
           ))}
         </div>
