@@ -155,3 +155,99 @@ export const deleteJob = async (id: string) => {
     return { success: false, message: 'فشل الاتصال بالسيرفر' };
   }
 };
+
+// Get Admin Stats
+export const getAdminStats = async () => {
+  try {
+    const response = await fetch(`${API_URL}/admin/stats`, {
+      headers: {
+        'Authorization': `Bearer ${getAdminToken()}`
+      }
+    });
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Get admin stats error:', error);
+    return { 
+      success: false, 
+      stats: {
+        totalJobs: 0,
+        totalUsers: 0,
+        activePremiumSubs: 0,
+        todaysJobs: 0
+      }
+    };
+  }
+};
+
+// Get All Users
+export const getUsers = async () => {
+  try {
+    const response = await fetch(`${API_URL}/admin/users`, {
+      headers: {
+        'Authorization': `Bearer ${getAdminToken()}`
+      }
+    });
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Get users error:', error);
+    return { success: false, users: [] };
+  }
+};
+
+// Delete User
+export const deleteUser = async (userId: string) => {
+  try {
+    const response = await fetch(`${API_URL}/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${getAdminToken()}`
+      }
+    });
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Delete user error:', error);
+    return { success: false, message: 'فشل الاتصال بالسيرفر' };
+  }
+};
+
+// Get Analytics
+export const getAnalytics = async (timeRange: "7days" | "30days" | "90days" = "30days") => {
+  try {
+    const response = await fetch(`${API_URL}/admin/analytics?timeRange=${timeRange}`, {
+      headers: {
+        'Authorization': `Bearer ${getAdminToken()}`
+      }
+    });
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Get analytics error:', error);
+    return { 
+      success: false,
+      analytics: {
+        overview: {
+          totalJobs: 0,
+          totalUsers: 0,
+          premiumUsers: 0,
+          jobsThisMonth: 0,
+          usersThisMonth: 0,
+          premiumRevenue: 0
+        },
+        jobsByType: [],
+        jobsByLocation: [],
+        userGrowth: [],
+        jobGrowth: [],
+        premiumGrowth: [],
+        topJobs: [],
+        recentActivity: []
+      }
+    };
+  }
+};

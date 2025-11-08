@@ -96,7 +96,7 @@ app.get("/make-server-8a20c00b/jobs/:id", async (c) => {
 app.post("/make-server-8a20c00b/jobs", async (c) => {
   try {
     const body = await c.req.json();
-    const { title, company, location, type, description } = body;
+    const { title, company, location, type, description, applicationUrl } = body;
     
     if (!title || !company) {
       return c.json({ success: false, error: "Title and company are required" }, 400);
@@ -110,6 +110,7 @@ app.post("/make-server-8a20c00b/jobs", async (c) => {
       location: location || "مسقط",
       type: type || "دوام كامل",
       description: description || "",
+      applicationUrl: applicationUrl || "",
       date: new Date().toISOString().split("T")[0]
     };
     
@@ -140,7 +141,7 @@ app.put("/make-server-8a20c00b/admin/jobs/:id", async (c) => {
   try {
     const id = c.req.param("id");
     const body = await c.req.json();
-    const { title, company, location, type, description, date } = body;
+    const { title, company, location, type, description, date, applicationUrl } = body;
     
     if (!title || !company) {
       return c.json({ success: false, error: "Title and company are required" }, 400);
@@ -153,6 +154,7 @@ app.put("/make-server-8a20c00b/admin/jobs/:id", async (c) => {
       location: location || "مسقط",
       type: type || "دوام كامل",
       description: description || "",
+      applicationUrl: applicationUrl || "",
       date: date || new Date().toISOString().split("T")[0]
     };
     
@@ -263,7 +265,7 @@ app.post("/make-server-8a20c00b/admin/register", async (c) => {
 app.post("/make-server-8a20c00b/admin/jobs", async (c) => {
   try {
     const body = await c.req.json();
-    const { title, company, location, type, description, date } = body;
+    const { title, company, location, type, description, date, applicationUrl } = body;
     
     if (!title || !company) {
       return c.json({ success: false, message: "العنوان واسم الشركة مطلوبان" }, 400);
@@ -277,6 +279,7 @@ app.post("/make-server-8a20c00b/admin/jobs", async (c) => {
       location: location || "مسقط",
       type: type || "دوام كامل",
       description: description || "",
+      applicationUrl: applicationUrl || "",
       date: date || new Date().toISOString().split("T")[0]
     };
     
@@ -386,10 +389,278 @@ app.get("/make-server-8a20c00b/user/profile/:userId", async (c) => {
 app.get("/make-server-8a20c00b/admin/users", async (c) => {
   try {
     const profiles = await kv.getByPrefix("user_profile:");
-    return c.json({ success: true, users: profiles });
+    const premiumSubs = await kv.getByPrefix("premium_subscription:");
+    
+    // Create a map of premium subscriptions by user ID
+    const premiumMap = new Map();
+    premiumSubs.forEach((sub: any) => {
+      if (sub.userId && sub.endDate) {
+        const endDate = new Date(sub.endDate);
+        const isActive = endDate > new Date();
+        if (isActive) {
+          premiumMap.set(sub.userId, sub.endDate);
+        }
+      }
+    });
+    
+    // Merge user profiles with premium info
+    const usersWithPremium = profiles.map((profile: any) => ({
+      ...profile,
+      isPremium: premiumMap.has(profile.id),
+      premiumEndDate: premiumMap.get(profile.id) || null
+    }));
+    
+    return c.json({ success: true, users: usersWithPremium });
   } catch (error) {
     console.error("Error fetching users:", error);
     return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Delete user (admin only)
+app.delete("/make-server-8a20c00b/admin/users/:userId", async (c) => {
+  try {
+    const userId = c.req.param("userId");
+    
+    // Delete user profile from KV store
+    await kv.del(`user_profile:${userId}`);
+    
+    // Delete premium subscription if exists
+    await kv.del(`premium_subscription:${userId}`);
+    
+    // Delete user from Supabase Auth
+    const { error } = await supabase.auth.admin.deleteUser(userId);
+    
+    if (error) {
+      console.error("Error deleting user from auth:", error);
+      // Continue anyway since we deleted from KV store
+    }
+    
+    return c.json({ success: true, message: "تم حذف المستخدم بنجاح" });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    return c.json({ success: false, message: "فشل في حذف المستخدم" }, 500);
+  }
+});
+
+// Get Analytics (admin only)
+app.get("/make-server-8a20c00b/admin/analytics", async (c) => {
+  try {
+    const timeRange = c.req.query("timeRange") || "30days";
+    const days = timeRange === "7days" ? 7 : timeRange === "90days" ? 90 : 30;
+    
+    // Get all data
+    const jobs = await kv.getByPrefix("job:");
+    const users = await kv.getByPrefix("user_profile:");
+    const premiumSubs = await kv.getByPrefix("premium_subscription:");
+    
+    // Calculate date range
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    // Overview Stats
+    const totalJobs = jobs.length;
+    const totalUsers = users.length;
+    
+    // Active premium subscriptions
+    const activePremium = premiumSubs.filter((sub: any) => {
+      if (!sub.endDate) return false;
+      return new Date(sub.endDate) > new Date();
+    });
+    const premiumUsers = activePremium.length;
+    
+    // Jobs this month
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const jobsThisMonth = jobs.filter((job: any) => {
+      if (!job.date) return false;
+      return new Date(job.date) >= oneMonthAgo;
+    }).length;
+    
+    // Users this month
+    const usersThisMonth = users.filter((user: any) => {
+      if (!user.createdAt) return false;
+      return new Date(user.createdAt) >= oneMonthAgo;
+    }).length;
+    
+    // Jobs by Type
+    const typeMap = new Map();
+    jobs.forEach((job: any) => {
+      const type = job.type || "غير محدد";
+      typeMap.set(type, (typeMap.get(type) || 0) + 1);
+    });
+    const jobsByType = Array.from(typeMap.entries()).map(([name, value]) => ({
+      name,
+      value
+    }));
+    
+    // Jobs by Location
+    const locationMap = new Map();
+    jobs.forEach((job: any) => {
+      const location = job.location || "غير محدد";
+      locationMap.set(location, (locationMap.get(location) || 0) + 1);
+    });
+    const jobsByLocation = Array.from(locationMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10); // Top 10 locations
+    
+    // User Growth (daily for selected period)
+    const userGrowth = [];
+    for (let i = days; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      const usersUntilDate = users.filter((user: any) => {
+        if (!user.createdAt) return false;
+        return new Date(user.createdAt).getTime() <= date.getTime();
+      }).length;
+      
+      userGrowth.push({
+        date: dateStr,
+        users: usersUntilDate
+      });
+    }
+    
+    // Job Growth (daily for selected period)
+    const jobGrowth = [];
+    for (let i = days; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      const jobsUntilDate = jobs.filter((job: any) => {
+        if (!job.date) return false;
+        return new Date(job.date).getTime() <= date.getTime();
+      }).length;
+      
+      jobGrowth.push({
+        date: dateStr,
+        jobs: jobsUntilDate
+      });
+    }
+    
+    // Premium Growth (daily for selected period)
+    const premiumGrowth = [];
+    for (let i = days; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      const premiumCount = premiumSubs.filter((sub: any) => {
+        if (!sub.startDate || !sub.endDate) return false;
+        const start = new Date(sub.startDate);
+        const end = new Date(sub.endDate);
+        return start <= date && date <= end;
+      }).length;
+      
+      premiumGrowth.push({
+        date: dateStr,
+        premium: premiumCount
+      });
+    }
+    
+    // Top Jobs (mock data - in real app would track views)
+    const topJobs = jobs.slice(0, 5).map((job: any) => ({
+      title: job.title,
+      company: job.company,
+      views: Math.floor(Math.random() * 500) + 50 // Mock views
+    }));
+    
+    // Recent Activity
+    const recentActivity = [];
+    
+    // Recent jobs
+    const recentJobs = jobs
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 3);
+    recentJobs.forEach((job: any) => {
+      recentActivity.push({
+        type: "job",
+        description: `تم إضافة وظيفة جديدة: ${job.title}`,
+        date: new Date(job.date).toLocaleDateString('ar-EG')
+      });
+    });
+    
+    // Recent users
+    const recentUsers = users
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3);
+    recentUsers.forEach((user: any) => {
+      recentActivity.push({
+        type: "user",
+        description: `مستخدم جديد: ${user.name}`,
+        date: new Date(user.createdAt).toLocaleDateString('ar-EG')
+      });
+    });
+    
+    // Recent premium
+    const recentPremium = activePremium
+      .sort((a: any, b: any) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
+      .slice(0, 2);
+    recentPremium.forEach((sub: any) => {
+      const user = users.find((u: any) => u.id === sub.userId);
+      if (user) {
+        recentActivity.push({
+          type: "premium",
+          description: `اشتراك Premium جديد: ${user.name}`,
+          date: new Date(sub.startDate).toLocaleDateString('ar-EG')
+        });
+      }
+    });
+    
+    // Sort by most recent
+    recentActivity.sort((a, b) => {
+      const dateA = new Date(a.date.split('/').reverse().join('-'));
+      const dateB = new Date(b.date.split('/').reverse().join('-'));
+      return dateB.getTime() - dateA.getTime();
+    });
+    
+    return c.json({
+      success: true,
+      analytics: {
+        overview: {
+          totalJobs,
+          totalUsers,
+          premiumUsers,
+          jobsThisMonth,
+          usersThisMonth,
+          premiumRevenue: premiumUsers * 25 // Mock revenue calculation
+        },
+        jobsByType,
+        jobsByLocation,
+        userGrowth,
+        jobGrowth,
+        premiumGrowth,
+        topJobs,
+        recentActivity: recentActivity.slice(0, 8)
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching analytics:", error);
+    return c.json({ 
+      success: false, 
+      error: String(error),
+      analytics: {
+        overview: {
+          totalJobs: 0,
+          totalUsers: 0,
+          premiumUsers: 0,
+          jobsThisMonth: 0,
+          usersThisMonth: 0,
+          premiumRevenue: 0
+        },
+        jobsByType: [],
+        jobsByLocation: [],
+        userGrowth: [],
+        jobGrowth: [],
+        premiumGrowth: [],
+        topJobs: [],
+        recentActivity: []
+      }
+    }, 500);
   }
 });
 

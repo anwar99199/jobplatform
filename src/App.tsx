@@ -16,6 +16,8 @@ import { AdminRegisterPage } from "./pages/admin/AdminRegisterPage";
 import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
 import { AdminJobsPage } from "./pages/admin/AdminJobsPage";
 import { AdminJobFormPage } from "./pages/admin/AdminJobFormPage";
+import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
+import { AdminAnalyticsPage } from "./pages/admin/AdminAnalyticsPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export default function App() {
@@ -50,6 +52,8 @@ export default function App() {
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/jobs" element={<AdminJobsPage />} />
           <Route path="/admin/jobs/:id" element={<AdminJobFormPage />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
           
           {/* Catch all unmatched routes and redirect to home */}
           <Route path="*" element={<Navigate to="/" replace />} />

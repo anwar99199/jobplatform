@@ -10,10 +10,18 @@ import {
   Plus,
   BarChart3
 } from "lucide-react";
+import { getAdminStats } from "../../utils/adminApi";
 
 export function AdminDashboardPage() {
   const navigate = useNavigate();
   const [adminUser, setAdminUser] = useState<any>(null);
+  const [stats, setStats] = useState({
+    totalJobs: 0,
+    totalUsers: 0,
+    activePremiumSubs: 0,
+    todaysJobs: 0
+  });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // التحقق من تسجيل الدخول
@@ -26,7 +34,22 @@ export function AdminDashboardPage() {
     }
     
     setAdminUser(JSON.parse(user));
+    loadStats();
   }, [navigate]);
+
+  const loadStats = async () => {
+    try {
+      setLoading(true);
+      const response = await getAdminStats();
+      if (response.success) {
+        setStats(response.stats);
+      }
+    } catch (error) {
+      console.error("Error loading stats:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("adminToken");
@@ -34,11 +57,31 @@ export function AdminDashboardPage() {
     navigate("/admin/login");
   };
 
-  const stats = [
-    { title: "إجمالي الوظائف", value: "156", icon: Briefcase, color: "bg-blue-500" },
-    { title: "المستخدمين", value: "1,234", icon: Users, color: "bg-green-500" },
-    { title: "الاشتراكات النشطة", value: "89", icon: TrendingUp, color: "bg-purple-500" },
-    { title: "التقديمات اليوم", value: "23", icon: BarChart3, color: "bg-orange-500" },
+  const statsCards = [
+    { 
+      title: "إجمالي الوظائف", 
+      value: loading ? "..." : stats.totalJobs.toString(), 
+      icon: Briefcase, 
+      color: "bg-blue-500" 
+    },
+    { 
+      title: "المستخدمين", 
+      value: loading ? "..." : stats.totalUsers.toString(), 
+      icon: Users, 
+      color: "bg-green-500" 
+    },
+    { 
+      title: "الاشتراكات النشطة", 
+      value: loading ? "..." : stats.activePremiumSubs.toString(), 
+      icon: TrendingUp, 
+      color: "bg-purple-500" 
+    },
+    { 
+      title: "الوظائف الجديدة (24 ساعة)", 
+      value: loading ? "..." : stats.todaysJobs.toString(), 
+      icon: BarChart3, 
+      color: "bg-orange-500" 
+    },
   ];
 
   const quickActions = [
@@ -91,7 +134,7 @@ export function AdminDashboardPage() {
       <div className="container mx-auto px-4 py-8">
         {/* Stats Grid */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => (
+          {statsCards.map((stat, index) => (
             <div key={index} className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className={`${stat.color} w-12 h-12 rounded-lg flex items-center justify-center`}>
