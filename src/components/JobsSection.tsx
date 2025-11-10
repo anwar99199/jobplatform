@@ -12,6 +12,7 @@ interface Job {
   location?: string;
   type?: string;
   description?: string;
+  applicationUrl?: string;
 }
 
 export function JobsSection() {

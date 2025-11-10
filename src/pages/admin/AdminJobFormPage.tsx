@@ -180,7 +180,7 @@ export function AdminJobFormPage() {
 
             {/* Application URL */}
             <div className="space-y-2">
-              <Label htmlFor="applicationUrl">رابط التقديم *</Label>
+              <Label htmlFor="applicationUrl">رابط التقديم (اختياري)</Label>
               <Input
                 id="applicationUrl"
                 name="applicationUrl"
@@ -189,7 +189,6 @@ export function AdminJobFormPage() {
                 onChange={handleChange}
                 placeholder="https://example.com/apply"
                 dir="ltr"
-                required
               />
               <p className="text-xs text-gray-500">
                 الرابط الذي سيتم توجيه المتقدمين إليه عند الضغط على زر "تقديم الطلب"

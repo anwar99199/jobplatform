@@ -12,7 +12,6 @@ import { JobDetailsPage } from "./pages/JobDetailsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
-import { AdminRegisterPage } from "./pages/admin/AdminRegisterPage";
 import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
 import { AdminJobsPage } from "./pages/admin/AdminJobsPage";
 import { AdminJobFormPage } from "./pages/admin/AdminJobFormPage";
@@ -48,7 +47,6 @@ export default function App() {
 
           {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLoginPage />} />
-          <Route path="/admin/register" element={<AdminRegisterPage />} />
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/jobs" element={<AdminJobsPage />} />
           <Route path="/admin/jobs/:id" element={<AdminJobFormPage />} />

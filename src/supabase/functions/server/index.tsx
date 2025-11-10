@@ -15,60 +15,59 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
-// Get all jobs
+// Simple admin auth middleware (optional - for security)
+const isAdmin = async (c: any, next: any) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  
+  // For now, allow all admin requests (you can add real verification later)
+  // In production, you should verify the token against stored admin tokens
+  console.log("Admin request with token:", adminToken ? "exists" : "missing");
+  
+  await next();
+};
+
+// Helper to convert snake_case to camelCase
+const toCamelCase = (obj: any) => {
+  if (!obj) return obj;
+  if (Array.isArray(obj)) return obj.map(toCamelCase);
+  if (typeof obj !== 'object') return obj;
+  
+  const newObj: any = {};
+  for (const key in obj) {
+    const camelKey = key.replace(/_([a-z])/g, (g: any) => g[1].toUpperCase());
+    newObj[camelKey] = toCamelCase(obj[key]);
+  }
+  return newObj;
+};
+
+// Helper to convert camelCase to snake_case
+const toSnakeCase = (obj: any) => {
+  if (!obj) return obj;
+  if (Array.isArray(obj)) return obj.map(toSnakeCase);
+  if (typeof obj !== 'object') return obj;
+  
+  const newObj: any = {};
+  for (const key in obj) {
+    const snakeKey = key.replace(/[A-Z]/g, (letter: string) => `_${letter.toLowerCase()}`);
+    newObj[snakeKey] = toSnakeCase(obj[key]);
+  }
+  return newObj;
+};
+
+// Get all jobs (from Supabase table)
 app.get("/make-server-8a20c00b/jobs", async (c) => {
   try {
-    const jobs = await kv.getByPrefix("job:");
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .order('date', { ascending: false });
     
-    // If no jobs exist, seed with initial data
-    if (jobs.length === 0) {
-      const initialJobs = [
-        {
-          id: "1",
-          title: "استراتيجي إبرام مستشار - فرص عمل عن بعد",
-          date: "2025-11-05",
-          company: "شركة الاستشارات الدولية",
-          location: "عن بعد",
-          type: "دوام كامل",
-          description: "نبحث عن استراتيجي إبرام مستشار للعمل عن بعد مع فريقنا الدولي."
-        },
-        {
-          id: "2",
-          title: "ملخصة توظيف - 25 شاغر في عدد من الوظائف لدى مجموعة من الشركات في عدة مجالات",
-          date: "2025-11-05",
-          company: "مجموعة شركات متنوعة",
-          location: "مسقط",
-          type: "دوام كامل",
-          description: "فرص متنوعة في مختلف المجالات والتخصصات."
-        },
-        {
-          id: "3",
-          title: "وزارة الإعلام - شواغر في عدة إدارات",
-          date: "2025-11-05",
-          company: "وزارة الإعلام",
-          location: "مسقط",
-          type: "حكومي",
-          description: "وظائف حكومية في وزارة الإعلام العمانية."
-        },
-        {
-          id: "4",
-          title: "شركة أودج - برنامج التدريب للخريجين 2025",
-          date: "2025-11-05",
-          company: "شركة أودج",
-          location: "مسقط",
-          type: "تدريب",
-          description: "برنامج تدريبي للخريجين في التخصصات العلمية والهندسية والإدارية."
-        }
-      ];
-
-      for (const job of initialJobs) {
-        await kv.set(`job:${job.id}`, job);
-      }
-      
-      return c.json({ success: true, jobs: initialJobs });
+    if (error) {
+      console.error("Error fetching jobs from Supabase:", error);
+      return c.json({ success: false, error: String(error) }, 500);
     }
     
-    return c.json({ success: true, jobs });
+    return c.json({ success: true, jobs: toCamelCase(data) });
   } catch (error) {
     console.error("Error fetching jobs:", error);
     return c.json({ success: false, error: String(error) }, 500);
@@ -79,13 +78,18 @@ app.get("/make-server-8a20c00b/jobs", async (c) => {
 app.get("/make-server-8a20c00b/jobs/:id", async (c) => {
   try {
     const id = c.req.param("id");
-    const job = await kv.get(`job:${id}`);
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('id', id)
+      .single();
     
-    if (!job) {
-      return c.json({ success: false, error: "Job not found" }, 404);
+    if (error) {
+      console.error("Error fetching job from Supabase:", error);
+      return c.json({ success: false, error: String(error) }, 500);
     }
     
-    return c.json({ success: true, job });
+    return c.json({ success: true, job: toCamelCase(data) });
   } catch (error) {
     console.error("Error fetching job:", error);
     return c.json({ success: false, error: String(error) }, 500);
@@ -114,9 +118,18 @@ app.post("/make-server-8a20c00b/jobs", async (c) => {
       date: new Date().toISOString().split("T")[0]
     };
     
-    await kv.set(`job:${id}`, job);
+    const { data, error } = await supabase
+      .from('jobs')
+      .insert(toSnakeCase(job))
+      .select('*')
+      .single();
     
-    return c.json({ success: true, job });
+    if (error) {
+      console.error("Error creating job in Supabase:", error);
+      return c.json({ success: false, error: String(error) }, 500);
+    }
+    
+    return c.json({ success: true, job: toCamelCase(data) });
   } catch (error) {
     console.error("Error creating job:", error);
     return c.json({ success: false, error: String(error) }, 500);
@@ -127,7 +140,15 @@ app.post("/make-server-8a20c00b/jobs", async (c) => {
 app.delete("/make-server-8a20c00b/jobs/:id", async (c) => {
   try {
     const id = c.req.param("id");
-    await kv.del(`job:${id}`);
+    const { error } = await supabase
+      .from('jobs')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error("Error deleting job from Supabase:", error);
+      return c.json({ success: false, error: String(error) }, 500);
+    }
     
     return c.json({ success: true, message: "Job deleted successfully" });
   } catch (error) {
@@ -143,27 +164,42 @@ app.put("/make-server-8a20c00b/admin/jobs/:id", async (c) => {
     const body = await c.req.json();
     const { title, company, location, type, description, date, applicationUrl } = body;
     
+    console.log("Updating job:", id, { title, company });
+    
     if (!title || !company) {
-      return c.json({ success: false, error: "Title and company are required" }, 400);
+      return c.json({ success: false, message: "العنوان واسم الشركة مطلوبان" }, 400);
     }
     
-    const job = {
-      id,
+    const jobData = {
       title,
       company,
       location: location || "مسقط",
       type: type || "دوام كامل",
       description: description || "",
-      applicationUrl: applicationUrl || "",
+      application_url: applicationUrl || "",
       date: date || new Date().toISOString().split("T")[0]
     };
     
-    await kv.set(`job:${id}`, job);
+    console.log("Updating in Supabase:", jobData);
     
-    return c.json({ success: true, job });
+    const { data, error } = await supabase
+      .from('jobs')
+      .update(jobData)
+      .eq('id', id)
+      .select('*')
+      .single();
+    
+    if (error) {
+      console.error("Error updating job in Supabase:", error);
+      return c.json({ success: false, message: "فشل في تحديث الوظيفة", error: error.message }, 500);
+    }
+    
+    console.log("Job updated successfully:", data);
+    
+    return c.json({ success: true, job: toCamelCase(data) });
   } catch (error) {
     console.error("Error updating job:", error);
-    return c.json({ success: false, error: String(error) }, 500);
+    return c.json({ success: false, message: "فشل في تحديث الوظيفة", error: String(error) }, 500);
   }
 });
 
@@ -176,30 +212,57 @@ app.post("/make-server-8a20c00b/admin/login", async (c) => {
       return c.json({ success: false, message: "البريد وكلمة المرور مطلوبان" }, 400);
     }
     
-    // Get admin from KV store
-    const admin = await kv.get("admin:user");
+    // الحسابات الثابتة المسموح بها
+    const ALLOWED_ADMINS = [
+      { email: "as8543245@gmail.com", password: "A1999anw#" },
+      { email: "anwaralrawahi459@gmail.com", password: "6101999" }
+    ];
     
-    if (!admin) {
-      return c.json({ success: false, message: "لم يتم تسجيل مدير بعد" }, 404);
+    // التحقق من أن البريد من الحسابات المسموح بها
+    const allowedAdmin = ALLOWED_ADMINS.find(admin => admin.email === email);
+    
+    if (!allowedAdmin) {
+      return c.json({ 
+        success: false, 
+        message: "هذا البريد غير مسموح به. فقط المدراء المعتمدون يمكنهم الدخول" 
+      }, 403);
     }
     
-    // Simple password check (in production, use bcrypt)
-    if (email === admin.email && password === admin.password) {
-      // Generate a simple token (in production, use JWT)
-      const token = `admin_${Date.now()}_${Math.random().toString(36)}`;
-      
-      return c.json({
-        success: true,
-        token,
-        user: {
-          email: admin.email,
-          name: admin.name,
-          role: "admin"
-        }
-      });
-    } else {
-      return c.json({ success: false, message: "بيانات تسجيل الدخول غير صحيحة" }, 401);
+    // التحقق من كلمة المرور
+    if (password !== allowedAdmin.password) {
+      return c.json({ success: false, message: "كلمة المرور غير صحيحة" }, 401);
     }
+    
+    // Get admin from Supabase table
+    const { data: admin, error } = await supabase
+      .from('admins')
+      .select('*')
+      .eq('email', email)
+      .single();
+    
+    if (error || !admin) {
+      console.error("Error fetching admin from Supabase:", error);
+      return c.json({ success: false, message: "حساب المدير غير موجود" }, 404);
+    }
+    
+    // Update last login
+    await supabase
+      .from('admins')
+      .update({ last_login: new Date().toISOString() })
+      .eq('email', email);
+    
+    // Generate a simple token (in production, use JWT)
+    const token = `admin_${Date.now()}_${Math.random().toString(36)}`;
+    
+    return c.json({
+      success: true,
+      token,
+      user: {
+        email: admin.email,
+        name: admin.name,
+        role: "admin"
+      }
+    });
   } catch (error) {
     console.error("Error during admin login:", error);
     return c.json({ success: false, message: "حدث خطأ أثناء تسجيل الدخول" }, 500);
@@ -209,11 +272,20 @@ app.post("/make-server-8a20c00b/admin/login", async (c) => {
 // Check if this is the first admin
 app.get("/make-server-8a20c00b/admin/check-first", async (c) => {
   try {
-    const admin = await kv.get("admin:user");
-    return c.json({ isFirstAdmin: !admin });
+    const { data: admins, error } = await supabase
+      .from('admins')
+      .select('id')
+      .limit(1);
+    
+    if (error) {
+      console.error("Error checking admins:", error);
+      return c.json({ isFirstAdmin: true });
+    }
+    
+    return c.json({ isFirstAdmin: !admins || admins.length === 0 });
   } catch (error) {
     console.error("Error checking first admin:", error);
-    return c.json({ isFirstAdmin: false }, 500);
+    return c.json({ isFirstAdmin: true }, 500);
   }
 });
 
@@ -227,21 +299,33 @@ app.post("/make-server-8a20c00b/admin/register", async (c) => {
     }
     
     // Check if admin already exists
-    const existingAdmin = await kv.get("admin:user");
-    if (existingAdmin) {
+    const { data: existingAdmins } = await supabase
+      .from('admins')
+      .select('id')
+      .limit(1);
+    
+    if (existingAdmins && existingAdmins.length > 0) {
       return c.json({ success: false, message: "يوجد مدير بالفعل" }, 400);
     }
     
     // Create admin user
-    const admin = {
-      name,
-      email,
-      password, // In production, hash this with bcrypt
-      role: "admin",
-      createdAt: new Date().toISOString()
-    };
+    const adminId = `admin_${Date.now()}`;
+    const { data: admin, error } = await supabase
+      .from('admins')
+      .insert([{
+        id: adminId,
+        name,
+        email,
+        password, // In production, hash this with bcrypt
+        created_at: new Date().toISOString()
+      }])
+      .select('*')
+      .single();
     
-    await kv.set("admin:user", admin);
+    if (error) {
+      console.error("Error creating admin:", error);
+      return c.json({ success: false, message: "حدث خطأ أثناء إنشاء الحساب" }, 500);
+    }
     
     // Generate token
     const token = `admin_${Date.now()}_${Math.random().toString(36)}`;
@@ -267,28 +351,41 @@ app.post("/make-server-8a20c00b/admin/jobs", async (c) => {
     const body = await c.req.json();
     const { title, company, location, type, description, date, applicationUrl } = body;
     
+    console.log("Creating job with data:", { title, company, location, type });
+    
     if (!title || !company) {
       return c.json({ success: false, message: "العنوان واسم الشركة مطلوبان" }, 400);
     }
     
-    const id = Date.now().toString();
-    const job = {
-      id,
+    const jobData = {
       title,
       company,
       location: location || "مسقط",
       type: type || "دوام كامل",
       description: description || "",
-      applicationUrl: applicationUrl || "",
+      application_url: applicationUrl || "",
       date: date || new Date().toISOString().split("T")[0]
     };
     
-    await kv.set(`job:${id}`, job);
+    console.log("Inserting into Supabase:", jobData);
     
-    return c.json({ success: true, job });
+    const { data, error } = await supabase
+      .from('jobs')
+      .insert([jobData])
+      .select('*')
+      .single();
+    
+    if (error) {
+      console.error("Error creating job in Supabase:", error);
+      return c.json({ success: false, message: "فشل في إنشاء الوظيفة", error: error.message }, 500);
+    }
+    
+    console.log("Job created successfully:", data);
+    
+    return c.json({ success: true, job: toCamelCase(data) });
   } catch (error) {
     console.error("Error creating job:", error);
-    return c.json({ success: false, message: "فشل في إنشاء الوظيفة" }, 500);
+    return c.json({ success: false, message: "فشل في إنشاء الوظيفة", error: String(error) }, 500);
   }
 });
 
@@ -296,12 +393,73 @@ app.post("/make-server-8a20c00b/admin/jobs", async (c) => {
 app.delete("/make-server-8a20c00b/admin/jobs/:id", async (c) => {
   try {
     const id = c.req.param("id");
-    await kv.del(`job:${id}`);
+    const { error } = await supabase
+      .from('jobs')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error("Error deleting job from Supabase:", error);
+      return c.json({ success: false, message: "فشل في حذف الوظيفة" }, 500);
+    }
     
     return c.json({ success: true, message: "تم حذف الوظيفة بنجاح" });
   } catch (error) {
     console.error("Error deleting job:", error);
     return c.json({ success: false, message: "فشل في حذف الوظيفة" }, 500);
+  }
+});
+
+// Get Admin Stats
+app.get("/make-server-8a20c00b/admin/stats", async (c) => {
+  try {
+    // Get data from Supabase tables
+    const { data: jobsData } = await supabase
+      .from('jobs')
+      .select('*');
+    
+    const { data: usersData } = await supabase
+      .from('users')
+      .select('*');
+    
+    const { data: premiumSubs } = await supabase
+      .from('premium_subscriptions')
+      .select('*')
+      .eq('status', 'active');
+    
+    const jobs = jobsData || [];
+    const users = usersData || [];
+    
+    // Active premium subscriptions
+    const activePremium = (premiumSubs || []).filter((sub: any) => {
+      if (!sub.end_date) return false;
+      return new Date(sub.end_date) > new Date();
+    });
+    
+    // Today's jobs
+    const today = new Date().toISOString().split('T')[0];
+    const todaysJobs = jobs.filter((job: any) => job.date === today);
+    
+    return c.json({
+      success: true,
+      stats: {
+        totalJobs: jobs.length,
+        totalUsers: users.length,
+        activePremiumSubs: activePremium.length,
+        todaysJobs: todaysJobs.length
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching admin stats:", error);
+    return c.json({
+      success: false,
+      stats: {
+        totalJobs: 0,
+        totalUsers: 0,
+        activePremiumSubs: 0,
+        todaysJobs: 0
+      }
+    }, 500);
   }
 });
 
@@ -316,7 +474,7 @@ app.post("/make-server-8a20c00b/signup", async (c) => {
       return c.json({ success: false, error: "Email, password, and name are required" }, 400);
     }
     
-    // Create user in Supabase Auth
+    // Create user in Supabase Auth directly (no need to check users table first)
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -348,17 +506,25 @@ app.post("/make-server-8a20c00b/signup", async (c) => {
     
     console.log("User created successfully in Supabase Auth:", data.user.id);
     
-    // Store additional user profile in KV store
-    const userProfile = {
-      id: data.user.id,
-      email: email,
-      name: name,
-      createdAt: new Date().toISOString(),
-      role: "user"
-    };
+    // Store user profile in users table
+    const { error: insertError } = await supabase
+      .from('users')
+      .insert([{
+        id: data.user.id,
+        email: email,
+        name: name,
+        role: 'user',
+        created_at: new Date().toISOString()
+      }]);
     
-    await kv.set(`user_profile:${data.user.id}`, userProfile);
-    console.log("User profile stored in KV store");
+    if (insertError) {
+      console.error("Error storing user profile in Supabase:", insertError);
+      // Delete auth user if profile creation fails
+      await supabase.auth.admin.deleteUser(data.user.id);
+      return c.json({ success: false, error: "حدث خطأ أثناء إنشاء الحساب" }, 500);
+    }
+    
+    console.log("User profile stored in Supabase users table");
     
     return c.json({ success: true, user: data.user });
   } catch (error) {
@@ -372,13 +538,19 @@ app.post("/make-server-8a20c00b/signup", async (c) => {
 app.get("/make-server-8a20c00b/user/profile/:userId", async (c) => {
   try {
     const userId = c.req.param("userId");
-    const profile = await kv.get(`user_profile:${userId}`);
     
-    if (!profile) {
+    const { data: profile, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (error || !profile) {
+      console.error("Error fetching user profile from Supabase:", error);
       return c.json({ success: false, error: "Profile not found" }, 404);
     }
     
-    return c.json({ success: true, profile });
+    return c.json({ success: true, profile: toCamelCase(profile) });
   } catch (error) {
     console.error("Error fetching user profile:", error);
     return c.json({ success: false, error: String(error) }, 500);
@@ -388,26 +560,44 @@ app.get("/make-server-8a20c00b/user/profile/:userId", async (c) => {
 // Get all users (admin only)
 app.get("/make-server-8a20c00b/admin/users", async (c) => {
   try {
-    const profiles = await kv.getByPrefix("user_profile:");
-    const premiumSubs = await kv.getByPrefix("premium_subscription:");
+    // Get all users from Supabase
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (usersError) {
+      console.error("Error fetching users from Supabase:", usersError);
+      return c.json({ success: false, error: String(usersError) }, 500);
+    }
+    
+    // Get all premium subscriptions
+    const { data: premiumSubs, error: premiumError } = await supabase
+      .from('premium_subscriptions')
+      .select('*')
+      .eq('status', 'active');
+    
+    if (premiumError) {
+      console.error("Error fetching premium subscriptions from Supabase:", premiumError);
+    }
     
     // Create a map of premium subscriptions by user ID
     const premiumMap = new Map();
-    premiumSubs.forEach((sub: any) => {
-      if (sub.userId && sub.endDate) {
-        const endDate = new Date(sub.endDate);
+    (premiumSubs || []).forEach((sub: any) => {
+      if (sub.user_id && sub.end_date) {
+        const endDate = new Date(sub.end_date);
         const isActive = endDate > new Date();
         if (isActive) {
-          premiumMap.set(sub.userId, sub.endDate);
+          premiumMap.set(sub.user_id, sub.end_date);
         }
       }
     });
     
     // Merge user profiles with premium info
-    const usersWithPremium = profiles.map((profile: any) => ({
-      ...profile,
-      isPremium: premiumMap.has(profile.id),
-      premiumEndDate: premiumMap.get(profile.id) || null
+    const usersWithPremium = (users || []).map((user: any) => ({
+      ...toCamelCase(user),
+      isPremium: premiumMap.has(user.id),
+      premiumEndDate: premiumMap.get(user.id) || null
     }));
     
     return c.json({ success: true, users: usersWithPremium });
@@ -422,18 +612,29 @@ app.delete("/make-server-8a20c00b/admin/users/:userId", async (c) => {
   try {
     const userId = c.req.param("userId");
     
-    // Delete user profile from KV store
-    await kv.del(`user_profile:${userId}`);
+    // Delete premium subscriptions first (if any)
+    await supabase
+      .from('premium_subscriptions')
+      .delete()
+      .eq('user_id', userId);
     
-    // Delete premium subscription if exists
-    await kv.del(`premium_subscription:${userId}`);
+    // Delete user profile from users table
+    const { error: deleteError } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', userId);
+    
+    if (deleteError) {
+      console.error("Error deleting user from Supabase:", deleteError);
+      return c.json({ success: false, message: "فشل في حذف المستخدم" }, 500);
+    }
     
     // Delete user from Supabase Auth
-    const { error } = await supabase.auth.admin.deleteUser(userId);
+    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
     
-    if (error) {
-      console.error("Error deleting user from auth:", error);
-      // Continue anyway since we deleted from KV store
+    if (authError) {
+      console.error("Error deleting user from auth:", authError);
+      // Continue anyway since we deleted from users table
     }
     
     return c.json({ success: true, message: "تم حذف المستخدم بنجاح" });
@@ -449,10 +650,22 @@ app.get("/make-server-8a20c00b/admin/analytics", async (c) => {
     const timeRange = c.req.query("timeRange") || "30days";
     const days = timeRange === "7days" ? 7 : timeRange === "90days" ? 90 : 30;
     
-    // Get all data
-    const jobs = await kv.getByPrefix("job:");
-    const users = await kv.getByPrefix("user_profile:");
-    const premiumSubs = await kv.getByPrefix("premium_subscription:");
+    // Get all data from Supabase tables
+    const { data: jobsData } = await supabase
+      .from('jobs')
+      .select('*');
+    
+    const { data: usersData } = await supabase
+      .from('users')
+      .select('*');
+    
+    const { data: premiumSubsData } = await supabase
+      .from('premium_subscriptions')
+      .select('*');
+    
+    const jobs = jobsData || [];
+    const users = usersData || [];
+    const premiumSubs = premiumSubsData || [];
     
     // Calculate date range
     const endDate = new Date();
@@ -465,8 +678,8 @@ app.get("/make-server-8a20c00b/admin/analytics", async (c) => {
     
     // Active premium subscriptions
     const activePremium = premiumSubs.filter((sub: any) => {
-      if (!sub.endDate) return false;
-      return new Date(sub.endDate) > new Date();
+      if (!sub.end_date || sub.status !== 'active') return false;
+      return new Date(sub.end_date) > new Date();
     });
     const premiumUsers = activePremium.length;
     
@@ -480,8 +693,8 @@ app.get("/make-server-8a20c00b/admin/analytics", async (c) => {
     
     // Users this month
     const usersThisMonth = users.filter((user: any) => {
-      if (!user.createdAt) return false;
-      return new Date(user.createdAt) >= oneMonthAgo;
+      if (!user.created_at) return false;
+      return new Date(user.created_at) >= oneMonthAgo;
     }).length;
     
     // Jobs by Type
@@ -514,8 +727,8 @@ app.get("/make-server-8a20c00b/admin/analytics", async (c) => {
       const dateStr = date.toISOString().split('T')[0];
       
       const usersUntilDate = users.filter((user: any) => {
-        if (!user.createdAt) return false;
-        return new Date(user.createdAt).getTime() <= date.getTime();
+        if (!user.created_at) return false;
+        return new Date(user.created_at).getTime() <= date.getTime();
       }).length;
       
       userGrowth.push({
@@ -550,9 +763,9 @@ app.get("/make-server-8a20c00b/admin/analytics", async (c) => {
       const dateStr = date.toISOString().split('T')[0];
       
       const premiumCount = premiumSubs.filter((sub: any) => {
-        if (!sub.startDate || !sub.endDate) return false;
-        const start = new Date(sub.startDate);
-        const end = new Date(sub.endDate);
+        if (!sub.start_date || !sub.end_date) return false;
+        const start = new Date(sub.start_date);
+        const end = new Date(sub.end_date);
         return start <= date && date <= end;
       }).length;
       
@@ -586,27 +799,27 @@ app.get("/make-server-8a20c00b/admin/analytics", async (c) => {
     
     // Recent users
     const recentUsers = users
-      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 3);
     recentUsers.forEach((user: any) => {
       recentActivity.push({
         type: "user",
         description: `مستخدم جديد: ${user.name}`,
-        date: new Date(user.createdAt).toLocaleDateString('ar-EG')
+        date: new Date(user.created_at).toLocaleDateString('ar-EG')
       });
     });
     
     // Recent premium
     const recentPremium = activePremium
-      .sort((a: any, b: any) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
+      .sort((a: any, b: any) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())
       .slice(0, 2);
     recentPremium.forEach((sub: any) => {
-      const user = users.find((u: any) => u.id === sub.userId);
+      const user = users.find((u: any) => u.id === sub.user_id);
       if (user) {
         recentActivity.push({
           type: "premium",
           description: `اشتراك Premium جديد: ${user.name}`,
-          date: new Date(sub.startDate).toLocaleDateString('ar-EG')
+          date: new Date(sub.start_date).toLocaleDateString('ar-EG')
         });
       }
     });
