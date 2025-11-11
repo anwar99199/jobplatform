@@ -28,14 +28,25 @@ export function PublicCardPage() {
 
   const loadCard = async (cardId: string) => {
     try {
+      console.log("Loading card with ID:", cardId);
+      
       const { data, error } = await supabase
         .from("digital_cards")
         .select("*")
         .eq("id", cardId)
-        .eq("is_active", true)
         .single();
 
-      if (error || !data) {
+      console.log("Card data:", data);
+      console.log("Card error:", error);
+
+      if (error) {
+        console.error("Supabase error:", error);
+        setNotFound(true);
+      } else if (!data) {
+        console.error("No card found");
+        setNotFound(true);
+      } else if (!data.is_active) {
+        console.error("Card is not active");
         setNotFound(true);
       } else {
         setCard(data);

@@ -16,7 +16,8 @@ import {
   Image as ImageIcon,
   Crown,
   ArrowRight,
-  ExternalLink
+  ExternalLink,
+  Share2
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -301,9 +302,85 @@ export function DigitalCardPage() {
 
   const handleCopyLink = () => {
     const link = `${window.location.origin}/card/${cardId}`;
-    navigator.clipboard.writeText(link);
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2000);
+    
+    // Use fallback method directly to avoid clipboard API errors
+    fallbackCopyTextToClipboard(link);
+  };
+
+  const fallbackCopyTextToClipboard = (text: string) => {
+    // Create temporary textarea
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    
+    // Position off-screen
+    textArea.style.position = "fixed";
+    textArea.style.top = "-9999px";
+    textArea.style.left = "-9999px";
+    textArea.style.opacity = "0";
+    textArea.setAttribute('readonly', '');
+    
+    document.body.appendChild(textArea);
+    
+    // Select the text
+    if (navigator.userAgent.match(/ipad|ipod|iphone/i)) {
+      // iOS specific
+      const range = document.createRange();
+      range.selectNodeContents(textArea);
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      textArea.setSelectionRange(0, 999999);
+    } else {
+      textArea.select();
+    }
+    
+    try {
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      } else {
+        // Show alert as last resort
+        prompt("انسخ هذا الرابط:", text);
+      }
+    } catch (err) {
+      document.body.removeChild(textArea);
+      // Show prompt dialog for manual copy
+      prompt("انسخ هذا الرابط:", text);
+    }
+  };
+
+  const handleShareCard = async () => {
+    const link = `${window.location.origin}/card/${cardId}`;
+    const shareData = {
+      title: `${formData.full_name} - البطاقة الرقمية`,
+      text: formData.job_title 
+        ? `${formData.full_name} - ${formData.job_title}\n\nشاهد بطاقتي الرقمية الاحترافية على وظائف عُمان!` 
+        : `${formData.full_name}\n\nشاهد بطاقتي الرقمية الاحترافية على وظائف عُمان!`,
+      url: link
+    };
+
+    // Check if Web Share API is supported
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        console.log('Card shared successfully');
+      } catch (err: any) {
+        // User cancelled share or error occurred
+        if (err.name !== 'AbortError') {
+          console.error('Share error:', err);
+          // Fallback to copy
+          handleCopyLink();
+        }
+      }
+    } else {
+      // Web Share API not supported - fallback to copy
+      handleCopyLink();
+    }
   };
 
   if (loading) {
@@ -570,6 +647,14 @@ export function DigitalCardPage() {
                     عرض البطاقة
                   </Button>
                 </Link>
+                <Button
+                  onClick={handleShareCard}
+                  variant="outline"
+                  className="w-full border-red-600 text-red-600 hover:bg-red-50"
+                >
+                  <Share2 className="w-4 h-4 ml-2" />
+                  مشاركة البطاقة
+                </Button>
               </div>
             )}
 
