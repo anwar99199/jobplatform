@@ -84,23 +84,37 @@ export function ProfilePage() {
 
   const loadUserProfile = async (userId: string) => {
     try {
-      // تحميل بيانات المستخدم من جدول users
+      // تحميل بيانات المستخدم من جدول users (معلومات أساسية)
       const { data: userData, error: userError } = await supabase
         .from("users")
         .select("*")
         .eq("id", userId)
         .single();
 
+      // تحميل بيانات المستخدم من جدول user_profiles (معلومات تفصيلية)
+      const { data: profileData, error: profileError } = await supabase
+        .from("user_profiles")
+        .select("*")
+        .eq("user_id", userId)
+        .single();
+
       if (userData) {
+        // دمج البيانات من الجدولين
+        const skills = profileData?.skills 
+          ? (Array.isArray(profileData.skills) 
+              ? profileData.skills.join(', ') 
+              : profileData.skills)
+          : "";
+
         setProfileData({
-          name: userData.name || "أنور لرواحي",
+          name: userData.name || "أنور الرواحي",
           email: userData.email || "as8543245@gmail.com",
-          phone: userData.phone || "",
-          location: userData.location || "مسقط",
-          specialty: userData.specialty || "تطوير البرمجيات",
-          experience: userData.experience || "",
-          skills: userData.skills || "",
-          bio: userData.bio || ""
+          phone: profileData?.phone || "",
+          location: profileData?.location || "مسقط",
+          specialty: profileData?.specialty || "تطوير البرمجيات",
+          experience: profileData?.experience || "",
+          skills: skills,
+          bio: profileData?.bio || ""
         });
       }
 
@@ -167,24 +181,44 @@ export function ProfilePage() {
     setLoading(true);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError("يرجى تسجيل الدخول أولاً");
+        setLoading(false);
+        return;
+      }
+
+      // تحويل skills من string إلى array
+      const skillsArray = profileData.skills 
+        ? profileData.skills.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : [];
+
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/update-profile`,
         {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${localStorage.getItem("userToken")}`,
+            "Authorization": `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             userId: user.id,
-            ...profileData
+            name: profileData.name,
+            phone: profileData.phone,
+            location: profileData.location,
+            specialty: profileData.specialty,
+            experience: profileData.experience,
+            skills: skillsArray,
+            bio: profileData.bio
           }),
         }
       );
 
       const data = await response.json();
 
-      if (!response.ok) {
+      console.log("Update response:", data);
+
+      if (!response.ok || !data.success) {
         setError(data.error || "فشل تحديث البيانات");
         setLoading(false);
         return;
@@ -192,6 +226,9 @@ export function ProfilePage() {
 
       setSuccess("تم تحديث البيانات بنجاح!");
       setEditing(false);
+      
+      // Reload profile to get fresh data
+      await loadUserProfile(user.id);
       
       setTimeout(() => setSuccess(""), 3000);
     } catch (err: any) {

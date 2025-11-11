@@ -551,7 +551,7 @@ app.post("/make-server-8a20c00b/signup", async (c) => {
     
     console.log("User created successfully in Supabase Auth:", data.user.id);
     
-    // Store user profile in users table
+    // Store user profile in users table (basic info only)
     const { error: insertError } = await supabase
       .from('users')
       .insert([{
@@ -571,6 +571,19 @@ app.post("/make-server-8a20c00b/signup", async (c) => {
     
     console.log("User profile stored in Supabase users table");
     
+    // Create empty user_profiles entry
+    const { error: profileError } = await supabase
+      .from('user_profiles')
+      .insert([{
+        user_id: data.user.id,
+        created_at: new Date().toISOString()
+      }]);
+    
+    if (profileError) {
+      console.error("Error creating user profile:", profileError);
+      // Continue anyway - profile can be created later
+    }
+    
     return c.json({ success: true, user: data.user });
   } catch (error) {
     console.error("Error during sign up:", error);
@@ -584,18 +597,52 @@ app.get("/make-server-8a20c00b/user/profile/:userId", async (c) => {
   try {
     const userId = c.req.param("userId");
     
-    const { data: profile, error } = await supabase
+    // Get basic user info from users table
+    const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('id', userId)
       .single();
     
-    if (error || !profile) {
-      console.error("Error fetching user profile from Supabase:", error);
+    if (userError || !user) {
+      console.error("Error fetching user from Supabase:", userError);
       return c.json({ success: false, error: "Profile not found" }, 404);
     }
     
-    return c.json({ success: true, profile: toCamelCase(profile) });
+    // Get detailed profile from user_profiles table
+    const { data: userProfile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    
+    // If profile doesn't exist, create it
+    if (profileError && profileError.code === 'PGRST116') {
+      const { data: newProfile } = await supabase
+        .from('user_profiles')
+        .insert([{
+          user_id: userId,
+          created_at: new Date().toISOString()
+        }])
+        .select('*')
+        .single();
+      
+      // Merge basic info with empty profile
+      const fullProfile = {
+        ...toCamelCase(user),
+        ...toCamelCase(newProfile)
+      };
+      
+      return c.json({ success: true, profile: fullProfile });
+    }
+    
+    // Merge basic user info with detailed profile
+    const fullProfile = {
+      ...toCamelCase(user),
+      ...toCamelCase(userProfile)
+    };
+    
+    return c.json({ success: true, profile: fullProfile });
   } catch (error) {
     console.error("Error fetching user profile:", error);
     return c.json({ success: false, error: String(error) }, 500);
@@ -939,28 +986,96 @@ app.put("/make-server-8a20c00b/update-profile", async (c) => {
       return c.json({ success: false, error: "Unauthorized" }, 403);
     }
 
-    const { data, error } = await supabase
-      .from('users')
-      .update({
-        name,
-        phone,
-        location,
-        specialty,
-        experience,
-        skills,
-        bio,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId)
-      .select('*')
+    // Update basic info (name) in users table
+    if (name) {
+      const { error: userError } = await supabase
+        .from('users')
+        .update({ name })
+        .eq('id', userId);
+
+      if (userError) {
+        console.error("Error updating user name:", userError);
+      }
+    }
+
+    // Ensure skills is an array
+    let skillsArray = [];
+    if (skills) {
+      if (Array.isArray(skills)) {
+        skillsArray = skills;
+      } else if (typeof skills === 'string') {
+        skillsArray = skills.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+    }
+
+    // Check if user_profiles record exists
+    const { data: existingProfile, error: checkError } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('user_id', userId)
       .single();
 
-    if (error) {
-      console.error("Error updating profile:", error);
+    let profile;
+    let profileError;
+
+    if (checkError && checkError.code === 'PGRST116') {
+      // Profile doesn't exist, create it
+      const { data: newProfile, error: insertError } = await supabase
+        .from('user_profiles')
+        .insert([{
+          user_id: userId,
+          phone,
+          location,
+          specialty,
+          experience,
+          skills: skillsArray,
+          bio,
+          created_at: new Date().toISOString()
+        }])
+        .select('*')
+        .single();
+      
+      profile = newProfile;
+      profileError = insertError;
+    } else {
+      // Profile exists, update it
+      const { data: updatedProfile, error: updateError } = await supabase
+        .from('user_profiles')
+        .update({
+          phone,
+          location,
+          specialty,
+          experience,
+          skills: skillsArray,
+          bio,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .select('*')
+        .single();
+      
+      profile = updatedProfile;
+      profileError = updateError;
+    }
+
+    if (profileError) {
+      console.error("Error updating profile:", profileError);
       return c.json({ success: false, error: "فشل تحديث البيانات" }, 500);
     }
 
-    return c.json({ success: true, profile: toCamelCase(data) });
+    // Get complete profile
+    const { data: userData, error: userDataError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    const fullProfile = {
+      ...toCamelCase(userData),
+      ...toCamelCase(profile)
+    };
+
+    return c.json({ success: true, profile: fullProfile });
   } catch (error) {
     console.error("Error updating profile:", error);
     return c.json({ success: false, error: String(error) }, 500);
@@ -997,13 +1112,19 @@ app.delete("/make-server-8a20c00b/delete-account", async (c) => {
       .delete()
       .eq('user_id', user.id);
 
+    // Delete user profile from user_profiles table
+    await supabase
+      .from('user_profiles')
+      .delete()
+      .eq('user_id', user.id);
+
     // Delete premium subscriptions (if any)
     await supabase
       .from('premium_subscriptions')
       .delete()
       .eq('user_id', user.id);
     
-    // Delete user profile from users table
+    // Delete user from users table
     const { error: deleteError } = await supabase
       .from('users')
       .delete()
