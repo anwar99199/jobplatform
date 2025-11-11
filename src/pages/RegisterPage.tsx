@@ -5,7 +5,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { UserPlus, Mail, Lock, User, AlertCircle, CheckCircle, Eye, EyeOff } from "lucide-react";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../utils/supabase/client";
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -20,11 +20,6 @@ export function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-
-  const supabase = createClient(
-    `https://${projectId}.supabase.co`,
-    publicAnonKey
-  );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({

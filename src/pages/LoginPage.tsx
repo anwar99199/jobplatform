@@ -4,8 +4,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { LogIn, Mail, Lock, AlertCircle, CheckCircle, Eye, EyeOff } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
-import { projectId, publicAnonKey } from "../utils/supabase/info";
+import { supabase } from "../utils/supabase/client";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -17,11 +16,6 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-
-  const supabase = createClient(
-    `https://${projectId}.supabase.co`,
-    publicAnonKey
-  );
 
   // عرض رسالة النجاح إذا جاءت من صفحة التسجيل
   useEffect(() => {

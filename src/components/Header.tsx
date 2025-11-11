@@ -48,8 +48,10 @@ export function Header() {
           {user ? (
             <>
               <div className="flex items-center gap-2">
-                <User className="w-4 h-4" />
-                <span>{user.user_metadata?.name || user.email}</span>
+                <Link to="/profile" className="hover:text-gray-200 transition-colors flex items-center gap-1">
+                  <User className="w-4 h-4" />
+                  <span>{user.user_metadata?.name || user.email}</span>
+                </Link>
               </div>
               <span className="mx-2">|</span>
               <button

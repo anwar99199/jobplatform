@@ -15,6 +15,28 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
+// Create CV files bucket on startup
+const initStorage = async () => {
+  try {
+    const bucketName = "make-8a20c00b-cv-files";
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
+    
+    if (!bucketExists) {
+      await supabase.storage.createBucket(bucketName, {
+        public: false,
+        fileSizeLimit: 5242880 // 5MB
+      });
+      console.log(`Bucket ${bucketName} created successfully`);
+    }
+  } catch (error) {
+    console.error("Error initializing storage:", error);
+  }
+};
+
+// Initialize storage
+initStorage();
+
 // Simple admin auth middleware (optional - for security)
 const isAdmin = async (c: any, next: any) => {
   const adminToken = c.req.header("X-Admin-Token");
@@ -24,6 +46,29 @@ const isAdmin = async (c: any, next: any) => {
   console.log("Admin request with token:", adminToken ? "exists" : "missing");
   
   await next();
+};
+
+// Helper to sanitize filename for storage
+const sanitizeFilename = (filename: string): string => {
+  // Get file extension
+  const lastDotIndex = filename.lastIndexOf('.');
+  const name = lastDotIndex > 0 ? filename.substring(0, lastDotIndex) : filename;
+  const extension = lastDotIndex > 0 ? filename.substring(lastDotIndex) : '';
+  
+  // Replace spaces and special chars with underscores, remove Arabic characters
+  let sanitized = name
+    .replace(/\s+/g, '_')                    // Replace spaces with underscores
+    .replace(/[\u0600-\u06FF]/g, '')         // Remove Arabic characters
+    .replace(/[^a-zA-Z0-9_-]/g, '_')         // Keep only alphanumeric, underscore, dash
+    .replace(/_+/g, '_')                     // Replace multiple underscores with single
+    .replace(/^_|_$/g, '');                  // Remove leading/trailing underscores
+  
+  // If name becomes empty after sanitization, use a default name
+  if (!sanitized) {
+    sanitized = 'cv_file';
+  }
+  
+  return sanitized + extension;
 };
 
 // Helper to convert snake_case to camelCase
@@ -354,7 +399,7 @@ app.post("/make-server-8a20c00b/admin/jobs", async (c) => {
     console.log("Creating job with data:", { title, company, location, type });
     
     if (!title || !company) {
-      return c.json({ success: false, message: "العنوان واسم الشركة مطلوبان" }, 400);
+      return c.json({ success: false, message: "اعنوان واسم الشركة مطلوبان" }, 400);
     }
     
     const jobData = {
@@ -874,6 +919,310 @@ app.get("/make-server-8a20c00b/admin/analytics", async (c) => {
         recentActivity: []
       }
     }, 500);
+  }
+});
+
+// Update user profile
+app.put("/make-server-8a20c00b/update-profile", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    const { userId, name, phone, location, specialty, experience, skills, bio } = await c.req.json();
+    
+    // Verify the user is updating their own profile
+    if (userId !== user.id) {
+      return c.json({ success: false, error: "Unauthorized" }, 403);
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({
+        name,
+        phone,
+        location,
+        specialty,
+        experience,
+        skills,
+        bio,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error("Error updating profile:", error);
+      return c.json({ success: false, error: "فشل تحديث البيانات" }, 500);
+    }
+
+    return c.json({ success: true, profile: toCamelCase(data) });
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Delete user account (self-deletion)
+app.delete("/make-server-8a20c00b/delete-account", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    const bucketName = "make-8a20c00b-cv-files";
+    
+    // Delete CV files from storage
+    const { data: files } = await supabase.storage
+      .from(bucketName)
+      .list(user.id);
+    
+    if (files && files.length > 0) {
+      const filePaths = files.map(file => `${user.id}/${file.name}`);
+      await supabase.storage
+        .from(bucketName)
+        .remove(filePaths);
+    }
+
+    // Delete CV files records from database
+    await supabase
+      .from('cv_files')
+      .delete()
+      .eq('user_id', user.id);
+
+    // Delete premium subscriptions (if any)
+    await supabase
+      .from('premium_subscriptions')
+      .delete()
+      .eq('user_id', user.id);
+    
+    // Delete user profile from users table
+    const { error: deleteError } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', user.id);
+    
+    if (deleteError) {
+      console.error("Error deleting user profile:", deleteError);
+      return c.json({ success: false, error: "فشل في حذف الحساب" }, 500);
+    }
+    
+    // Delete user from Supabase Auth
+    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(user.id);
+    
+    if (authDeleteError) {
+      console.error("Error deleting user from auth:", authDeleteError);
+      // Continue anyway since we deleted from users table
+    }
+    
+    return c.json({ success: true, message: "تم حذف الحساب بنجاح" });
+  } catch (error) {
+    console.error("Error deleting account:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Upload CV file
+app.post("/make-server-8a20c00b/upload-cv", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    const formData = await c.req.formData();
+    const file = formData.get('file') as File;
+    
+    if (!file) {
+      return c.json({ success: false, error: "No file provided" }, 400);
+    }
+
+    // Check file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      return c.json({ success: false, error: "الملف أكبر من 5 ميجا" }, 400);
+    }
+
+    // Check file type
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    
+    if (!allowedTypes.includes(file.type)) {
+      return c.json({ success: false, error: "نوع الملف غير مدعوم. يرجى رفع PDF أو Word" }, 400);
+    }
+
+    // Check if user already has 5 files
+    const { data: existingFiles, error: countError } = await supabase
+      .from('cv_files')
+      .select('id')
+      .eq('user_id', user.id);
+    
+    if (existingFiles && existingFiles.length >= 5) {
+      return c.json({ success: false, error: "لا يمكن رفع أكثر من 5 ملفات" }, 400);
+    }
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const filename = `${timestamp}_${sanitizeFilename(file.name)}`;
+    const filePath = `${user.id}/${filename}`;
+
+    // Convert File to ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    // Upload file to Supabase Storage
+    const bucketName = "make-8a20c00b-cv-files";
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, uint8Array, {
+        contentType: file.type,
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error("Error uploading file:", uploadError);
+      return c.json({ success: false, error: "فشل رفع الملف" }, 500);
+    }
+
+    // Save file metadata to database
+    const { data: fileRecord, error: dbError } = await supabase
+      .from('cv_files')
+      .insert([{
+        user_id: user.id,
+        file_name: file.name,
+        file_path: filePath,
+        file_size: file.size,
+        file_type: file.type
+      }])
+      .select('*')
+      .single();
+
+    if (dbError) {
+      console.error("Error saving file metadata:", dbError);
+      // Delete uploaded file if database insert fails
+      await supabase.storage.from(bucketName).remove([filePath]);
+      return c.json({ success: false, error: "فشل حفظ بيانات الملف" }, 500);
+    }
+
+    return c.json({ 
+      success: true, 
+      file: toCamelCase(fileRecord)
+    });
+  } catch (error) {
+    console.error("Error uploading CV:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Get user's CV files
+app.get("/make-server-8a20c00b/cv-files", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    const bucketName = "make-8a20c00b-cv-files";
+    
+    // Get files from database
+    const { data: fileRecords, error: dbError } = await supabase
+      .from('cv_files')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('uploaded_at', { ascending: false });
+
+    if (dbError) {
+      console.error("Error fetching files from database:", dbError);
+      return c.json({ success: false, error: "فشل جلب الملفات" }, 500);
+    }
+
+    // Generate signed URLs for each file (valid for 1 hour)
+    const filesWithUrls = await Promise.all(
+      (fileRecords || []).map(async (fileRecord: any) => {
+        const { data: urlData } = await supabase.storage
+          .from(bucketName)
+          .createSignedUrl(fileRecord.file_path, 3600); // 1 hour
+
+        return {
+          id: fileRecord.id,
+          name: fileRecord.file_name,
+          path: fileRecord.file_path,
+          size: fileRecord.file_size,
+          type: fileRecord.file_type,
+          uploadedAt: fileRecord.uploaded_at,
+          url: urlData?.signedUrl || ''
+        };
+      })
+    );
+
+    return c.json({ success: true, files: filesWithUrls });
+  } catch (error) {
+    console.error("Error fetching CV files:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Delete CV file
+app.delete("/make-server-8a20c00b/cv-files", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    const { filePath } = await c.req.json();
+    
+    if (!filePath) {
+      return c.json({ success: false, error: "File path is required" }, 400);
+    }
+
+    // Verify the file belongs to the user
+    if (!filePath.startsWith(`${user.id}/`)) {
+      return c.json({ success: false, error: "Unauthorized" }, 403);
+    }
+
+    // Delete from database first
+    const { error: dbError } = await supabase
+      .from('cv_files')
+      .delete()
+      .eq('file_path', filePath)
+      .eq('user_id', user.id);
+
+    if (dbError) {
+      console.error("Error deleting file from database:", dbError);
+      return c.json({ success: false, error: "فشل حذف الملف من قاعدة البيانات" }, 500);
+    }
+
+    // Delete from storage
+    const bucketName = "make-8a20c00b-cv-files";
+    const { error: deleteError } = await supabase.storage
+      .from(bucketName)
+      .remove([filePath]);
+
+    if (deleteError) {
+      console.error("Error deleting file from storage:", deleteError);
+      // File might already be deleted, but we already removed from DB
+    }
+
+    return c.json({ success: true, message: "تم حذف الملف بنجاح" });
+  } catch (error) {
+    console.error("Error deleting CV file:", error);
+    return c.json({ success: false, error: String(error) }, 500);
   }
 });
 

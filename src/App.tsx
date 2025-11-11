@@ -11,6 +11,7 @@ import { GovernmentJobsPage } from "./pages/GovernmentJobsPage";
 import { JobDetailsPage } from "./pages/JobDetailsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { ProfilePage } from "./pages/ProfilePage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
 import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
 import { AdminJobsPage } from "./pages/admin/AdminJobsPage";
@@ -39,6 +40,11 @@ export default function App() {
             <Route path="company-jobs" element={<CompanyJobsPage />} />
             <Route path="government-jobs" element={<GovernmentJobsPage />} />
             <Route path="job/:id" element={<JobDetailsPage />} />
+            <Route path="profile" element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            } />
           </Route>
 
           {/* User Auth Routes */}
