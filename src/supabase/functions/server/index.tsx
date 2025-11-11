@@ -29,6 +29,30 @@ const initStorage = async () => {
       });
       console.log(`Bucket ${bucketName} created successfully`);
     }
+
+    // Create digital card files buckets
+    const profileImagesBucket = "make-8a20c00b-profile-images";
+    const cardCVsBucket = "make-8a20c00b-digital-cvs";
+    
+    // Profile images bucket (public)
+    const profileBucketExists = buckets?.some(bucket => bucket.name === profileImagesBucket);
+    if (!profileBucketExists) {
+      await supabase.storage.createBucket(profileImagesBucket, {
+        public: true,
+        fileSizeLimit: 2097152 // 2MB
+      });
+      console.log(`Bucket ${profileImagesBucket} created successfully`);
+    }
+
+    // Digital card CVs bucket (private with signed URLs)
+    const cvBucketExists = buckets?.some(bucket => bucket.name === cardCVsBucket);
+    if (!cvBucketExists) {
+      await supabase.storage.createBucket(cardCVsBucket, {
+        public: false,
+        fileSizeLimit: 5242880 // 5MB
+      });
+      console.log(`Bucket ${cardCVsBucket} created successfully`);
+    }
   } catch (error) {
     console.error("Error initializing storage:", error);
   }
@@ -1343,6 +1367,255 @@ app.delete("/make-server-8a20c00b/cv-files", async (c) => {
     return c.json({ success: true, message: "تم حذف الملف بنجاح" });
   } catch (error) {
     console.error("Error deleting CV file:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// ============================================
+// DIGITAL CARD ROUTES
+// ============================================
+
+// Upload file for digital card (profile image or CV)
+app.post("/make-server-8a20c00b/upload-card-file", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    const formData = await c.req.formData();
+    const file = formData.get('file') as File;
+    const type = formData.get('type') as string; // 'profile_image' or 'cv'
+    
+    if (!file) {
+      return c.json({ success: false, error: "No file provided" }, 400);
+    }
+
+    if (!type || (type !== 'profile_image' && type !== 'cv')) {
+      return c.json({ success: false, error: "Invalid file type" }, 400);
+    }
+
+    // Validate file based on type
+    if (type === 'profile_image') {
+      // Check file size (2MB max for images)
+      if (file.size > 2 * 1024 * 1024) {
+        return c.json({ success: false, error: "حجم الصورة يجب أن يكون أقل من 2 ميجابايت" }, 400);
+      }
+
+      // Check file type
+      if (!file.type.startsWith('image/')) {
+        return c.json({ success: false, error: "يرجى اختيار صورة فقط" }, 400);
+      }
+    } else if (type === 'cv') {
+      // Check file size (5MB max for CV)
+      if (file.size > 5 * 1024 * 1024) {
+        return c.json({ success: false, error: "حجم الملف يجب أن يكون أقل من 5 ميجابايت" }, 400);
+      }
+
+      // Check file type
+      if (file.type !== 'application/pdf') {
+        return c.json({ success: false, error: "يرجى اختيار ملف PDF فقط" }, 400);
+      }
+    }
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const filename = `${timestamp}_${sanitizeFilename(file.name)}`;
+    
+    // Select bucket based on type
+    const bucketName = type === 'profile_image' 
+      ? 'make-8a20c00b-profile-images' 
+      : 'make-8a20c00b-digital-cvs';
+    
+    const filePath = `${user.id}/${filename}`;
+
+    // Convert File to ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    // Upload file to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, uint8Array, {
+        contentType: file.type,
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error("Error uploading file:", uploadError);
+      return c.json({ success: false, error: "فشل رفع الملف" }, 500);
+    }
+
+    // Get public URL for the file
+    let fileUrl;
+    
+    if (type === 'profile_image') {
+      // Public bucket - get public URL
+      const { data: urlData } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(filePath);
+      fileUrl = urlData.publicUrl;
+    } else {
+      // Private bucket - create signed URL (valid for 1 year)
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from(bucketName)
+        .createSignedUrl(filePath, 31536000); // 1 year in seconds
+      
+      if (urlError) {
+        console.error("Error creating signed URL:", urlError);
+        return c.json({ success: false, error: "فشل إنشاء رابط الملف" }, 500);
+      }
+      
+      fileUrl = urlData.signedUrl;
+    }
+
+    return c.json({ 
+      success: true, 
+      url: fileUrl,
+      path: filePath
+    });
+  } catch (error) {
+    console.error("Error uploading card file:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Create digital card
+app.post("/make-server-8a20c00b/digital-card", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    const body = await c.req.json();
+    const { 
+      full_name, 
+      job_title, 
+      phone, 
+      email, 
+      whatsapp, 
+      linkedin, 
+      bio,
+      profile_image_url,
+      cv_url
+    } = body;
+
+    if (!full_name) {
+      return c.json({ success: false, error: "الاسم الكامل مطلوب" }, 400);
+    }
+
+    // Check if user already has a card
+    const { data: existingCard } = await supabase
+      .from('digital_cards')
+      .select('id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (existingCard) {
+      return c.json({ success: false, error: "لديك بطاقة رقمية بالفعل. استخدم التحديث بدلاً من الإنشاء" }, 400);
+    }
+
+    const cardData = {
+      user_id: user.id,
+      full_name,
+      job_title: job_title || null,
+      phone: phone || null,
+      email: email || null,
+      whatsapp: whatsapp || null,
+      linkedin: linkedin || null,
+      bio: bio || null,
+      profile_image_url: profile_image_url || null,
+      cv_url: cv_url || null,
+      is_active: true,
+      created_at: new Date().toISOString()
+    };
+
+    const { data: card, error } = await supabase
+      .from('digital_cards')
+      .insert([cardData])
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error("Error creating digital card:", error);
+      return c.json({ success: false, error: "فشل إنشاء البطاقة الرقمية" }, 500);
+    }
+
+    return c.json({ 
+      success: true, 
+      cardId: card.id,
+      card: toCamelCase(card)
+    });
+  } catch (error) {
+    console.error("Error creating digital card:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Update digital card
+app.put("/make-server-8a20c00b/digital-card", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    const body = await c.req.json();
+    const { 
+      full_name, 
+      job_title, 
+      phone, 
+      email, 
+      whatsapp, 
+      linkedin, 
+      bio,
+      profile_image_url,
+      cv_url
+    } = body;
+
+    if (!full_name) {
+      return c.json({ success: false, error: "الاسم الكامل مطلوب" }, 400);
+    }
+
+    const cardData = {
+      full_name,
+      job_title: job_title || null,
+      phone: phone || null,
+      email: email || null,
+      whatsapp: whatsapp || null,
+      linkedin: linkedin || null,
+      bio: bio || null,
+      profile_image_url: profile_image_url || null,
+      cv_url: cv_url || null,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data: card, error } = await supabase
+      .from('digital_cards')
+      .update(cardData)
+      .eq('user_id', user.id)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error("Error updating digital card:", error);
+      return c.json({ success: false, error: "فشل تحديث البطاقة الرقمية" }, 500);
+    }
+
+    return c.json({ 
+      success: true, 
+      cardId: card.id,
+      card: toCamelCase(card)
+    });
+  } catch (error) {
+    console.error("Error updating digital card:", error);
     return c.json({ success: false, error: String(error) }, 500);
   }
 });

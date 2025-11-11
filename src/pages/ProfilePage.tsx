@@ -127,7 +127,7 @@ export function ProfilePage() {
 
       if (premiumSub) {
         setPremiumData({
-          isActive: premiumSub.is_active || false,
+          isActive: premiumSub.status === 'active' || false,
           startDate: new Date(premiumSub.start_date).toLocaleDateString('ar-SA'),
           renewalDate: new Date(premiumSub.end_date).toLocaleDateString('ar-SA'),
           autoRenew: true

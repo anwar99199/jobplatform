@@ -1,5 +1,6 @@
-import { Crown, CheckCircle, Star, Zap, FileText, Target } from "lucide-react";
+import { Crown, CheckCircle, Star, Zap, FileText, Target, Sparkles, CreditCard } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { Link } from "react-router-dom";
 
 export function PremiumPage() {
   const premiumFeatures = [
@@ -11,7 +12,8 @@ export function PremiumPage() {
         "محتوى مخصص لكل وظيفة",
         "ربط مهاراتك بمتطلبات الوظيفة",
         "صياغة احترافية ومقنعة"
-      ]
+      ],
+      link: "/premium/cover-letter"
     },
     {
       icon: <Target className="w-16 h-16 text-red-600" />,
@@ -21,7 +23,19 @@ export function PremiumPage() {
         "تنسيق متوافق مع ATS",
         "كلمات مفتاحية محسّنة",
         "تحليل نسبة القبول"
-      ]
+      ],
+      link: "/premium/cv-builder"
+    },
+    {
+      icon: <CreditCard className="w-16 h-16 text-red-600" />,
+      title: "بطاقة رقمية احترافية",
+      description: "بطاقة تعريف رقمية شخصية يمكن مشاركتها مع أصحاب العمل",
+      features: [
+        "تصميم احترافي وأنيق",
+        "رابط قابل للمشاركة",
+        "عرض جميع معلومات التواصل"
+      ],
+      link: "/premium/digital-card"
     }
   ];
 
@@ -35,9 +49,9 @@ export function PremiumPage() {
         "للفترة كاملة",
         "توليد Cover Letter بالذكاء الاصطناعي",
         "توليد CV بنظام ATS بالذكاء الاصطناعي",
+        "بطاقة رقمية احترافية",
         "استخدام AI لتحليل التوافق مع الوظائف",
-        "إشعارات فورية للوظائف الجديدة",
-        "تحليلات ورؤى متقدمة"
+        "إشعارات فورية للوظائف الجديدة"
       ],
       popular: false
     },
@@ -50,9 +64,9 @@ export function PremiumPage() {
         "للفترة كاملة",
         "توليد Cover Letter بالذكاء الاصطناعي",
         "توليد CV بنظام ATS بالذكاء الاصطناعي",
+        "بطاقة رقمية احترافية",
         "استخدام AI لتحليل التوافق مع الوظائف",
-        "إشعارات فورية للوظائف الجديدة",
-        "تحليلات ورؤى متقدمة"
+        "إشعارات فورية للوظائف الجديدة"
       ],
       popular: true,
       badge: "الأكثر توفيراً"
@@ -78,26 +92,31 @@ export function PremiumPage() {
       {/* Features Grid */}
       <div className="grid md:grid-cols-2 gap-8 mb-16 max-w-5xl mx-auto">
         {premiumFeatures.map((feature, index) => (
-          <div
-            key={index}
-            className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow"
-          >
-            <div className="flex justify-center mb-6">
-              {feature.icon}
+          <Link to={feature.link} key={index}>
+            <div className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-all hover:scale-105 cursor-pointer">
+              <div className="flex justify-center mb-6">
+                {feature.icon}
+              </div>
+              <h3 className="text-2xl mb-4 text-gray-800 text-center">{feature.title}</h3>
+              <p className="text-gray-600 text-center mb-6">{feature.description}</p>
+              <ul className="space-y-3">
+                {feature.features.map((feat, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    <span className="text-gray-700">
+                      {feat}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="text-center mt-6">
+                <span className="text-red-600 hover:text-red-700 font-medium inline-flex items-center gap-2">
+                  جرب الأداة الآن
+                  <Sparkles className="w-4 h-4" />
+                </span>
+              </div>
             </div>
-            <h3 className="text-2xl mb-4 text-gray-800 text-center">{feature.title}</h3>
-            <p className="text-gray-600 text-center mb-6">{feature.description}</p>
-            <ul className="space-y-3">
-              {feature.features.map((feat, idx) => (
-                <li key={idx} className="flex items-start gap-2">
-                  <span className="text-red-600 mt-1">•</span>
-                  <span className="text-gray-700">
-                    {feat}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          </Link>
         ))}
       </div>
 

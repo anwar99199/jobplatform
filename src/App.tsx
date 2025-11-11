@@ -12,6 +12,10 @@ import { JobDetailsPage } from "./pages/JobDetailsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { CVBuilderPage } from "./pages/CVBuilderPage";
+import { CoverLetterPage } from "./pages/CoverLetterPage";
+import { DigitalCardPage } from "./pages/DigitalCardPage";
+import { PublicCardPage } from "./pages/PublicCardPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
 import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
 import { AdminJobsPage } from "./pages/admin/AdminJobsPage";
@@ -46,6 +50,26 @@ export default function App() {
               </ProtectedRoute>
             } />
           </Route>
+
+          {/* Premium Tools Routes (Outside Layout - Full Page) */}
+          <Route path="/premium/cv-builder" element={
+            <ProtectedRoute>
+              <CVBuilderPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/premium/cover-letter" element={
+            <ProtectedRoute>
+              <CoverLetterPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/premium/digital-card" element={
+            <ProtectedRoute>
+              <DigitalCardPage />
+            </ProtectedRoute>
+          } />
+
+          {/* Public Card Page - No Auth Required */}
+          <Route path="/card/:id" element={<PublicCardPage />} />
 
           {/* User Auth Routes */}
           <Route path="login" element={<LoginPage />} />
