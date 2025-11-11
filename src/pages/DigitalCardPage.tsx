@@ -356,31 +356,62 @@ export function DigitalCardPage() {
 
   const handleShareCard = async () => {
     const link = `${window.location.origin}/card/${cardId}`;
-    const shareData = {
-      title: `${formData.full_name} - البطاقة الرقمية`,
-      text: formData.job_title 
-        ? `${formData.full_name} - ${formData.job_title}\n\nشاهد بطاقتي الرقمية الاحترافية على وظائف عُمان!` 
-        : `${formData.full_name}\n\nشاهد بطاقتي الرقمية الاحترافية على وظائف عُمان!`,
-      url: link
-    };
+    
+    // Check if we're on HTTPS or localhost
+    const isSecureContext = window.isSecureContext;
+    
+    console.log('Is secure context (HTTPS):', isSecureContext);
+    console.log('Share API supported:', !!navigator.share);
+    
+    // Build share text
+    let shareText = `${formData.full_name}`;
+    if (formData.job_title) {
+      shareText += ` - ${formData.job_title}`;
+    }
+    shareText += `\n\nشاهد بطاقتي الرقمية:\n${link}`;
+    
+    // Only use Share API if it's supported AND we're in secure context
+    if (navigator.share && isSecureContext) {
+      const shareData = {
+        title: `${formData.full_name} - البطاقة الرقمية`,
+        text: shareText,
+      };
 
-    // Check if Web Share API is supported
-    if (navigator.share) {
       try {
         await navigator.share(shareData);
         console.log('Card shared successfully');
+        return;
       } catch (err: any) {
-        // User cancelled share or error occurred
+        console.error('Share error:', err);
+        // If user didn't cancel, try fallback
         if (err.name !== 'AbortError') {
-          console.error('Share error:', err);
-          // Fallback to copy
-          handleCopyLink();
+          console.log('Share failed, trying WhatsApp fallback');
+        } else {
+          // User cancelled
+          return;
         }
       }
-    } else {
-      // Web Share API not supported - fallback to copy
-      handleCopyLink();
     }
+    
+    // Fallback: Try WhatsApp Web (works on all devices)
+    tryWhatsAppShare(shareText);
+  };
+
+  const tryWhatsAppShare = (text: string) => {
+    // Encode the message for URL
+    const encodedText = encodeURIComponent(text);
+    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
+    
+    // Try to open WhatsApp
+    const whatsappWindow = window.open(whatsappUrl, '_blank');
+    
+    // If popup was blocked or failed, fallback to copy
+    setTimeout(() => {
+      if (!whatsappWindow || whatsappWindow.closed || typeof whatsappWindow.closed === 'undefined') {
+        console.log('WhatsApp failed, using copy fallback');
+        handleCopyLink();
+      }
+    }, 1000);
   };
 
   if (loading) {
@@ -401,7 +432,7 @@ export function DigitalCardPage() {
           <div className="max-w-2xl mx-auto text-center">
             <div className="bg-white rounded-lg shadow-lg p-8">
               <Crown className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-              <h2 className="text-2xl text-gray-800 mb-4">البطاقة الرقمية - ميزة حصرية</h2>
+              <h2 className="text-2xl text-gray-800 mb-4">البطاقة الرقمية - ميزة حصية</h2>
               <p className="text-gray-600 mb-6">
                 هذه الميزة متاحة فقط لمشتركي Premium. اشترك الآن للحصول على بطاقتك الرقمية الاحترافية!
               </p>
