@@ -45,7 +45,7 @@ export function AdminLoginPage() {
             <Lock className="w-10 h-10 text-red-600" />
           </div>
           <h1 className="text-3xl text-white mb-2">لوحة التحكم</h1>
-          <p className="text-red-100">وظائف عُمان - مدير النظام</p>
+          <p className="text-red-100">منصة عُمان للوظائف - مدير النظام</p>
         </div>
 
         {/* Login Form */}

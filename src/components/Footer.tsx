@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 export function Footer() {
   const footerLinks = [
-    { title: "من نحن", href: "#" },
+    { title: "من نحن", href: "/about" },
     { title: "تواصل معنا", href: "#" },
     { title: "وظائف حكومية", href: "/government-jobs" },
     { title: "وظائف الشركات", href: "/company-jobs" },
@@ -17,15 +17,6 @@ export function Footer() {
     <footer className="bg-gray-800 text-white mt-16">
       {/* Main Footer Content */}
       <div className="container mx-auto px-4 py-12">
-        <div className="max-w-4xl mx-auto text-center mb-8">
-          <h3 className="text-2xl mb-6">من نحن</h3>
-          <p className="leading-relaxed text-gray-300">
-            انقل اليومية في قالب سهل وبسيط و يقوم أيضًا بمساعدة الراغبين بتطوير قدراتهم بالتي ، بوظائف بمرتبات أعلى ، بتقديم الموقع بطرح 
-            أخبار الوظائف بشكل يومي و مؤقر لتزويل الخبر من المصدر يعتمد الموقع على عدة مصادر يتم ذكرها في صفحة الإعلان عن الوظيفة، 
-            وتكوين مصادر الإعلان إما من موقع الوزارة والمؤسسة والشركة ومصادر الصحف والمواقع الصحفية ومن خلال صحا...
-          </p>
-        </div>
-
         {/* Social Media Icons */}
         <div className="flex justify-center items-center gap-6 mb-8">
           <a href="#" className="hover:text-red-500 transition-colors">
@@ -74,7 +65,7 @@ export function Footer() {
             هذا الموقع مستقل ولا يُقرّ أي جهة حكومية ... المحتوى المنشور يعبر عن آراء أصحابه ولا يعكس بالضرورة وجهة نظر الموقع
           </p>
           <p className="mt-2">
-            جميع الحقوق محفوظة لموقع وظائف عمان © 2023 – 
+            جميع الحقوق محفوظة لموقع منصة عُمان للوظائف © 2023 – 
             <a href="#" className="text-blue-400 hover:underline mx-1">
               شروط و اتفاقية الاستخدام
             </a>

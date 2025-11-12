@@ -226,10 +226,10 @@ export function PublicCardPage() {
 
             {/* Footer */}
             <div className="text-center pt-6 border-t border-gray-700">
-              <p className="text-sm text-gray-500">
+              <p className="text-gray-400 text-sm">
                 تم الإنشاء عبر منصة{" "}
                 <Link to="/" className="text-yellow-500 hover:text-yellow-400">
-                  وظائف عُمان
+                  منصة عُمان للوظائف
                 </Link>
               </p>
             </div>

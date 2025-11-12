@@ -118,7 +118,7 @@ export function LoginPage() {
               <Lock className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl text-gray-800 mb-2">تسجيل الدخول</h1>
-            <p className="text-gray-600">مرحباً بعودتك إلى وظائف عُمان</p>
+            <p className="text-gray-600">مرحباً بعودتك إلى منصة عُمان للوظائف</p>
           </div>
 
           {/* Error Message */}

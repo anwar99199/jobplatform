@@ -135,7 +135,7 @@ export function RegisterPage() {
               <UserPlus className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl text-gray-800 mb-2">إنشاء حساب جديد</h1>
-            <p className="text-gray-600">انضم إلى وظائف عُمان الآن</p>
+            <p className="text-gray-600">انضم إلى منصة عُمان للوظائف الآن</p>
           </div>
 
           {/* Error Message */}

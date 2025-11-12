@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { HomePage } from "./pages/HomePage";
+import { AboutPage } from "./pages/AboutPage";
 import { PremiumPage } from "./pages/PremiumPage";
 import { CareerPathPage } from "./pages/CareerPathPage";
 import { NewsPage } from "./pages/NewsPage";
@@ -32,6 +33,7 @@ export default function App() {
           {/* Public Routes */}
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
+            <Route path="about" element={<AboutPage />} />
             <Route path="premium" element={
               <ProtectedRoute>
                 <PremiumPage />

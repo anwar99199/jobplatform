@@ -137,7 +137,7 @@ ${formData.skills ? formData.skills.split(',').map(s => `• ${s.trim()}`).join(
 ${formData.applicantName}
 
 ---
-تم التوليد بواسطة وظائف عُمان Premium ✨
+تم التوليد بواسطة منصة عُمان للوظائف Premium ✨
       `;
 
       setGeneratedLetter(letter.trim());

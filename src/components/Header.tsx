@@ -30,6 +30,7 @@ export function Header() {
 
   const navItems = [
     { title: "الرئيسية", path: "/" },
+    { title: "من نحن", path: "/about" },
     { title: "خدمات Premium", path: "/premium" },
     { title: "المسار الوظيفي", path: "/career-path" },
     { title: "أهتم بالأخبار", path: "/news" },
@@ -81,8 +82,8 @@ export function Header() {
 
       {/* Logo Section */}
       <Link to="/" className="block bg-red-600 text-white py-6 px-4 text-center hover:bg-red-700 transition-colors">
-        <h1 className="text-4xl">وظائف</h1>
-        <h2 className="text-5xl">عُمان</h2>
+        <h1 className="text-4xl">منصة عُمان</h1>
+        <h2 className="text-3xl">للوظائف</h2>
       </Link>
 
       {/* Navigation */}
