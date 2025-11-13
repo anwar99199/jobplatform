@@ -144,6 +144,14 @@ export function AdminNewsPage() {
     try {
       setUploadingImage(true);
 
+      // Get access token
+      const accessToken = localStorage.getItem('admin_access_token');
+      if (!accessToken) {
+        toast.error("يرجى تسجيل الدخول كمسؤول أولاً");
+        setUploadingImage(false);
+        return;
+      }
+
       // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -152,22 +160,32 @@ export function AdminNewsPage() {
       reader.readAsDataURL(file);
 
       // Upload to server
-      const accessToken = localStorage.getItem('admin_access_token');
       const formData = new FormData();
       formData.append('file', file);
+
+      console.log("Uploading image to:", `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/admin/upload-news-image`);
 
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/admin/upload-news-image`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${accessToken || publicAnonKey}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: formData,
         }
       );
 
+      console.log("Response status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Upload failed:", errorText);
+        throw new Error(`Upload failed: ${response.status}`);
+      }
+
       const result = await response.json();
+      console.log("Upload result:", result);
 
       if (result.success) {
         setFormData(prev => ({ ...prev, image_url: result.imageUrl }));
@@ -178,7 +196,7 @@ export function AdminNewsPage() {
       }
     } catch (error) {
       console.error("Error uploading image:", error);
-      toast.error("حدث خطأ أثناء رفع الصورة");
+      toast.error(`حدث خطأ أثناء رفع الصورة: ${error.message || error}`);
       setImagePreview("");
     } finally {
       setUploadingImage(false);

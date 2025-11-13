@@ -2032,16 +2032,23 @@ app.post("/make-server-8a20c00b/admin/upload-news-image", async (c) => {
   try {
     // Get access token from Authorization header
     const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    if (!accessToken) {
+      return c.json({ success: false, error: "Unauthorized - No token provided" }, 401);
+    }
+
     const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
     
     if (!user || authError) {
-      return c.json({ success: false, error: "Unauthorized - Admin access required" }, 401);
+      console.error("Auth error in upload news image:", authError);
+      return c.json({ success: false, error: "Unauthorized - Invalid token" }, 401);
     }
 
     // Verify user is admin
     const adminEmails = ['as8543245@gmail.com', 'anwaralrawahi459@gmail.com'];
     if (!adminEmails.includes(user.email || '')) {
-      return c.json({ success: false, error: "Unauthorized - Admin access required" }, 401);
+      console.log(`Non-admin user attempted upload: ${user.email}`);
+      return c.json({ success: false, error: "Unauthorized - Admin access required" }, 403);
     }
 
     const formData = await c.req.formData();
