@@ -1,8 +1,10 @@
-import { Calendar, ArrowLeft } from "lucide-react";
+import { Calendar, ArrowLeft, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getJobs } from "../utils/api";
 import { Button } from "./ui/button";
+import { supabase } from "../utils/supabase/client";
+import { calculateJobMatch } from "../utils/jobMatchCalculator";
 
 interface Job {
   id: string;
@@ -13,6 +15,15 @@ interface Job {
   type?: string;
   description?: string;
   applicationUrl?: string;
+  requirements?: string;
+}
+
+interface UserProfile {
+  skills?: string | string[];
+  experience?: string;
+  specialty?: string;
+  location?: string;
+  education?: string;
 }
 
 export function JobsSection() {
@@ -22,10 +33,70 @@ export function JobsSection() {
   const [previousJobs, setPreviousJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [jobMatches, setJobMatches] = useState<{ [key: string]: number }>({});
 
   useEffect(() => {
     loadJobs();
+    checkPremiumStatus();
+    loadUserProfile();
   }, []);
+
+  const checkPremiumStatus = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) {
+        setIsPremium(false);
+        return;
+      }
+      
+      // Check if user has active premium subscription
+      const { data: subscription, error } = await supabase
+        .from('premium_subscriptions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', 'active')
+        .single();
+      
+      if (error) {
+        console.log("No active premium subscription found");
+        setIsPremium(false);
+        return;
+      }
+      
+      setIsPremium(!!subscription);
+    } catch (err) {
+      console.log("Error checking premium status:", err);
+      setIsPremium(false);
+    }
+  };
+
+  const loadUserProfile = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return;
+
+      // تحميل بيانات البروفايل من user_profiles
+      const { data: profileData, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (profileData && !error) {
+        setUserProfile({
+          skills: profileData.skills,
+          experience: profileData.experience,
+          specialty: profileData.specialty,
+          location: profileData.location,
+          education: profileData.education
+        });
+      }
+    } catch (err) {
+      console.log("Error loading user profile:", err);
+    }
+  };
 
   const loadJobs = async () => {
     try {
@@ -53,8 +124,31 @@ export function JobsSection() {
     }
   };
 
+  // حساب نسب التوافق لجميع الوظائف عند تحميل البروفايل والوظائف
+  useEffect(() => {
+    if (isPremium && userProfile && jobs.length > 0) {
+      const matches: { [key: string]: number } = {};
+      jobs.forEach(job => {
+        matches[job.id] = calculateJobMatch(userProfile, job);
+      });
+      setJobMatches(matches);
+    }
+  }, [isPremium, userProfile, jobs]);
+
   const handleViewDetails = (jobId: string) => {
     navigate(`/job/${jobId}`);
+  };
+
+  const getMatchColor = (percentage: number) => {
+    if (percentage >= 80) return "text-green-600";
+    if (percentage >= 60) return "text-yellow-600";
+    return "text-orange-600";
+  };
+
+  const getMatchBgColor = (percentage: number) => {
+    if (percentage >= 80) return "bg-green-50";
+    if (percentage >= 60) return "bg-yellow-50";
+    return "bg-orange-50";
   };
 
   if (loading) {
@@ -77,6 +171,59 @@ export function JobsSection() {
     );
   }
 
+  const renderJobCard = (job: Job) => {
+    const matchPercentage = jobMatches[job.id];
+    const hasMatch = isPremium && matchPercentage !== undefined;
+
+    return (
+      <div
+        key={job.id}
+        className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow bg-gray-50 flex flex-col gap-4 relative"
+      >
+        {/* Match Percentage Badge */}
+        {hasMatch && (
+          <div 
+            className={`absolute -top-3 -left-3 ${getMatchBgColor(matchPercentage)} ${getMatchColor(matchPercentage)} px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 shadow-md border-2 ${matchPercentage >= 80 ? 'border-green-200' : matchPercentage >= 60 ? 'border-yellow-200' : 'border-orange-200'}`}
+          >
+            <span className="font-bold">{matchPercentage}%</span>
+            <TrendingUp className="w-4 h-4" />
+          </div>
+        )}
+        
+        <div className="flex items-start gap-4">
+          <div className="flex-1">
+            <h3 className="text-red-600 mb-3 leading-relaxed">
+              {job.title}
+            </h3>
+            {job.company && (
+              <p className="text-gray-700 mb-2">{job.company}</p>
+            )}
+            {job.location && (
+              <p className="text-gray-600 text-sm mb-2">📍 {job.location}</p>
+            )}
+            <div className="flex items-center gap-2 text-gray-600 text-sm">
+              <Calendar className="w-4 h-4" />
+              <span>{job.date}</span>
+            </div>
+          </div>
+          <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
+            <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="10"/>
+            </svg>
+          </div>
+        </div>
+        
+        <Button 
+          onClick={() => handleViewDetails(job.id)}
+          className="w-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center gap-2"
+        >
+          <span>التفاصيل والتقديم</span>
+          <ArrowLeft className="w-4 h-4" />
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 space-y-12">
       {/* وظائف اليوم */}
@@ -90,43 +237,7 @@ export function JobsSection() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
-            {todayJobs.map((job) => (
-              <div
-                key={job.id}
-                className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow bg-gray-50 flex flex-col gap-4"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="flex-1">
-                    <h3 className="text-red-600 mb-3 leading-relaxed">
-                      {job.title}
-                    </h3>
-                    {job.company && (
-                      <p className="text-gray-700 mb-2">{job.company}</p>
-                    )}
-                    {job.location && (
-                      <p className="text-gray-600 text-sm mb-2">📍 {job.location}</p>
-                    )}
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Calendar className="w-4 h-4" />
-                      <span>{job.date}</span>
-                    </div>
-                  </div>
-                  <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
-                    <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="12" cy="12" r="10"/>
-                    </svg>
-                  </div>
-                </div>
-                
-                <Button 
-                  onClick={() => handleViewDetails(job.id)}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center gap-2"
-                >
-                  <span>التفاصيل والتقديم</span>
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-              </div>
-            ))}
+            {todayJobs.map(renderJobCard)}
           </div>
         </div>
       )}
@@ -142,43 +253,7 @@ export function JobsSection() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
-            {previousJobs.map((job) => (
-              <div
-                key={job.id}
-                className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow bg-gray-50 flex flex-col gap-4"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="flex-1">
-                    <h3 className="text-red-600 mb-3 leading-relaxed">
-                      {job.title}
-                    </h3>
-                    {job.company && (
-                      <p className="text-gray-700 mb-2">{job.company}</p>
-                    )}
-                    {job.location && (
-                      <p className="text-gray-600 text-sm mb-2">📍 {job.location}</p>
-                    )}
-                    <div className="flex items-center gap-2 text-gray-600 text-sm">
-                      <Calendar className="w-4 h-4" />
-                      <span>{job.date}</span>
-                    </div>
-                  </div>
-                  <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
-                    <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="12" cy="12" r="10"/>
-                    </svg>
-                  </div>
-                </div>
-                
-                <Button 
-                  onClick={() => handleViewDetails(job.id)}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center gap-2"
-                >
-                  <span>التفاصيل والتقديم</span>
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-              </div>
-            ))}
+            {previousJobs.map(renderJobCard)}
           </div>
         </div>
       )}

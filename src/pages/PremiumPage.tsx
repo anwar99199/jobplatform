@@ -1,4 +1,4 @@
-import { Crown, CheckCircle, Star, Zap, FileText, Target, Sparkles, CreditCard } from "lucide-react";
+import { Crown, CheckCircle, Star, Zap, FileText, Target, Sparkles, CreditCard, TrendingUp } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom";
 import { useState } from "react";
@@ -95,6 +95,18 @@ export function PremiumPage() {
         "عرض جميع معلومات التواصل"
       ],
       link: "/premium/digital-card"
+    },
+    {
+      icon: <TrendingUp className="w-16 h-16 text-red-600" />,
+      title: "نسبة التوافق مع الوظائف",
+      description: "اعرف مدى توافقك مع كل وظيفة قبل التقديم بتحليل ذكي دقيق",
+      features: [
+        "تحليل دقيق للتوافق مع متطلبات الوظيفة",
+        "مقارنة المهارات المطلوبة بمهاراتك",
+        "توصيات مخصصة للتحسين",
+        "نسبة مئوية واضحة للتوافق"
+      ],
+      link: "/premium/job-match"
     }
   ];
 
@@ -110,7 +122,8 @@ export function PremiumPage() {
         "توليد Cover Letter بالذكاء الاصطناعي",
         "توليد CV بنظام ATS بالذكاء الاصطناعي",
         "بطاقة رقمية احترافية",
-        "استخدام AI لتحيل التوافق مع الوظائف",
+        "نسبة التوافق مع الوظائف بالذكاء الاصطناعي",
+        "تحليل دقيق ومقارنة المهارات",
         "إشعارات فورية للوظائف الجديدة"
       ],
       popular: false
@@ -126,7 +139,8 @@ export function PremiumPage() {
         "توليد Cover Letter بالذكاء الاصطناعي",
         "توليد CV بنظام ATS بالذكاء الاصطناعي",
         "بطاقة رقمية احترافية",
-        "استخدام AI لتحليل التوافق مع الوظائف",
+        "نسبة التوافق مع الوظائف بالذكاء الاصطناعي",
+        "تحليل دقيق ومقارنة المهارات",
         "إشعارات فورية للوظائف الجديدة"
       ],
       popular: true,
@@ -151,10 +165,10 @@ export function PremiumPage() {
       </div>
 
       {/* Features Grid */}
-      <div className="grid md:grid-cols-2 gap-8 mb-16 max-w-5xl mx-auto">
+      <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-8 mb-16 max-w-6xl mx-auto">
         {premiumFeatures.map((feature, index) => (
           <Link to={feature.link} key={index}>
-            <div className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-all hover:scale-105 cursor-pointer">
+            <div className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-all hover:scale-105 cursor-pointer h-full">
               <div className="flex justify-center mb-6">
                 {feature.icon}
               </div>

@@ -1400,8 +1400,9 @@ app.get("/make-server-8a20c00b/cv-files", async (c) => {
       .order('uploaded_at', { ascending: false });
 
     if (dbError) {
-      console.error("Error fetching files from database:", dbError);
-      return c.json({ success: false, error: "فشل جلب الملفات" }, 500);
+      console.log("CV files table not available or error fetching files:", dbError.message);
+      // Return empty array instead of error - CV feature is optional
+      return c.json({ success: true, files: [] });
     }
 
     // Generate signed URLs for each file (valid for 1 hour)
@@ -1747,11 +1748,11 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
     // Get Thawani API key from environment
     const thawaniSecretKey = Deno.env.get("THAWANI_SECRET_KEY");
     if (!thawaniSecretKey) {
-      console.error("THAWANI_SECRET_KEY not configured");
+      console.log("THAWANI_SECRET_KEY not configured - payment system not available");
       return c.json({ 
         success: false, 
-        error: "نظام الدفع غير مكتمل الإعداد. يرجى المحاولة لاحقاً." 
-      }, 500);
+        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة مفتاح THAWANI_SECRET_KEY في إعدادات المشروع." 
+      }, 400);
     }
 
     // Determine plan details
@@ -1828,10 +1829,11 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
 
     const thawaniSecretKey = Deno.env.get("THAWANI_SECRET_KEY");
     if (!thawaniSecretKey) {
+      console.log("THAWANI_SECRET_KEY not configured - payment verification not available");
       return c.json({ 
         success: false, 
-        error: "نظام الدفع غير مكتمل الإعداد" 
-      }, 500);
+        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة مفتاح THAWANI_SECRET_KEY." 
+      }, 400);
     }
 
     // Get session details from Thawani

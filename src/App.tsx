@@ -16,6 +16,7 @@ import { CVBuilderPage } from "./pages/CVBuilderPage";
 import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { DigitalCardPage } from "./pages/DigitalCardPage";
 import { PublicCardPage } from "./pages/PublicCardPage";
+import { JobMatchPage } from "./pages/JobMatchPage";
 import { Layout } from "./components/Layout";
 import { PaymentSuccessPage } from "./pages/PaymentSuccessPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
@@ -69,6 +70,11 @@ export default function App() {
           <Route path="/premium/digital-card" element={
             <ProtectedRoute>
               <DigitalCardPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/premium/job-match" element={
+            <ProtectedRoute>
+              <JobMatchPage />
             </ProtectedRoute>
           } />
 

@@ -144,7 +144,10 @@ export function ProfilePage() {
   const loadCVFiles = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        console.log("No active session, skipping CV files load");
+        return;
+      }
 
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/cv-files`,
@@ -155,12 +158,18 @@ export function ProfilePage() {
         }
       );
 
+      if (!response.ok) {
+        console.log("CV files endpoint returned error:", response.status);
+        return;
+      }
+
       const data = await response.json();
       if (data.success && data.files) {
         setUploadedFiles(data.files);
       }
     } catch (err) {
-      console.error("Error loading CV files:", err);
+      // Silently handle errors as CV feature is optional
+      console.log("CV files not available:", err);
     }
   };
 

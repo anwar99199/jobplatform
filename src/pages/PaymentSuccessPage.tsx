@@ -1,4 +1,4 @@
-import { CheckCircle, Crown, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle, Crown, ArrowRight, Loader2, Sparkles, FileText, TrendingUp } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Link, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -171,6 +171,12 @@ export function PaymentSuccessPage() {
               أنشئ CV احترافي
             </Button>
           </Link>
+          <Link to="/premium/job-match">
+            <Button className="bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 px-8 py-6">
+              <TrendingUp className="ml-2 w-5 h-5" />
+              تحليل التوافق مع الوظائف
+            </Button>
+          </Link>
         </div>
 
         {/* Return Home */}
@@ -186,6 +192,3 @@ export function PaymentSuccessPage() {
     </div>
   );
 }
-
-// Import missing icons
-import { Sparkles, FileText } from "lucide-react";
