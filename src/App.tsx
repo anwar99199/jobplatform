@@ -17,6 +17,7 @@ import { CVBuilderPage } from "./pages/CVBuilderPage";
 import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { DigitalCardPage } from "./pages/DigitalCardPage";
 import { PublicCardPage } from "./pages/PublicCardPage";
+import { PaymentSuccessPage } from "./pages/PaymentSuccessPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
 import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
 import { AdminJobsPage } from "./pages/admin/AdminJobsPage";
@@ -72,6 +73,13 @@ export default function App() {
 
           {/* Public Card Page - No Auth Required */}
           <Route path="/card/:id" element={<PublicCardPage />} />
+
+          {/* Payment Success Page */}
+          <Route path="/payment/success" element={
+            <ProtectedRoute>
+              <PaymentSuccessPage />
+            </ProtectedRoute>
+          } />
 
           {/* User Auth Routes */}
           <Route path="login" element={<LoginPage />} />

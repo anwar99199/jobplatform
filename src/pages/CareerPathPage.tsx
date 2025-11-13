@@ -50,7 +50,7 @@ export function CareerPathPage() {
           <h2 className="text-2xl mb-4">هل تحتاج لمساعدة في تخطيط مسارك المهني؟</h2>
           <p className="mb-6">استخدم خدمات الذكاء الاصطناعي لدينا للحصول على توصيات مخصصة</p>
           <button className="bg-white text-red-600 px-8 py-3 rounded-full hover:bg-gray-100 transition-colors">
-            ابدأ الآن
+            قريباً
           </button>
         </div>
       </div>

@@ -1,8 +1,67 @@
 import { Crown, CheckCircle, Star, Zap, FileText, Target, Sparkles, CreditCard } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom";
+import { useState } from "react";
+import { projectId, publicAnonKey } from "../utils/supabase/info";
+import { supabase } from "../utils/supabase/client";
+import { toast } from "sonner@2.0.3";
 
 export function PremiumPage() {
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const handleSelectPlan = async (planType: "semi-annual" | "yearly") => {
+    try {
+      setLoading(planType);
+
+      // Check if user is logged in
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error("يرجى تسجيل الدخول أولاً");
+        window.location.href = "/login";
+        return;
+      }
+
+      const userId = session.user.id;
+      const userEmail = session.user.email || "";
+      const userName = session.user.user_metadata?.name || "";
+
+      // Create payment session
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/payment/create-session`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${publicAnonKey}`,
+          },
+          body: JSON.stringify({
+            planType,
+            userId,
+            userEmail,
+            userName
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!result.success) {
+        toast.error(result.error || "فشل إنشاء جلسة الدفع");
+        setLoading(null);
+        return;
+      }
+
+      // Redirect to Thawani checkout
+      window.location.href = result.checkoutUrl;
+
+    } catch (error) {
+      console.error("Error creating payment session:", error);
+      toast.error("حدث خطأ أثناء معالجة طلبك");
+      setLoading(null);
+    }
+  };
+
   const premiumFeatures = [
     {
       icon: <FileText className="w-16 h-16 text-red-600" />,
@@ -45,12 +104,13 @@ export function PremiumPage() {
       price: "6",
       duration: "6 أشهر",
       monthly: "شهرياً 1 RO",
+      planType: "semi-annual" as const,
       features: [
         "للفترة كاملة",
         "توليد Cover Letter بالذكاء الاصطناعي",
         "توليد CV بنظام ATS بالذكاء الاصطناعي",
         "بطاقة رقمية احترافية",
-        "استخدام AI لتحليل التوافق مع الوظائف",
+        "استخدام AI لتحيل التوافق مع الوظائف",
         "إشعارات فورية للوظائف الجديدة"
       ],
       popular: false
@@ -60,6 +120,7 @@ export function PremiumPage() {
       price: "10",
       duration: "12 شهر",
       monthly: "شهرياً 1 RO وفر 2",
+      planType: "yearly" as const,
       features: [
         "للفترة كاملة",
         "توليد Cover Letter بالذكاء الاصطناعي",
@@ -174,8 +235,10 @@ export function PremiumPage() {
                     ? "bg-white text-red-600 hover:bg-gray-100"
                     : "bg-red-600 text-white hover:bg-red-700"
                 }`}
+                onClick={() => handleSelectPlan(plan.planType)}
+                disabled={loading === plan.planType}
               >
-                اختر هذه الباقة
+                {loading === plan.planType ? "جاري المعالجة..." : "اختر هذه الباقة"}
               </Button>
             </div>
           ))}

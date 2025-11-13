@@ -1620,4 +1620,240 @@ app.put("/make-server-8a20c00b/digital-card", async (c) => {
   }
 });
 
+// ============================================
+// THAWANI PAYMENT INTEGRATION
+// ============================================
+
+// Create payment session with Thawani
+app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
+  try {
+    const { planType, userId, userEmail, userName } = await c.req.json();
+    
+    // Validate input
+    if (!planType || !userId) {
+      return c.json({ success: false, error: "Missing required fields" }, 400);
+    }
+
+    // Get Thawani API key from environment
+    const thawaniSecretKey = Deno.env.get("THAWANI_SECRET_KEY");
+    if (!thawaniSecretKey) {
+      console.error("THAWANI_SECRET_KEY not configured");
+      return c.json({ 
+        success: false, 
+        error: "نظام الدفع غير مكتمل الإعداد. يرجى المحاولة لاحقاً." 
+      }, 500);
+    }
+
+    // Determine plan details
+    const planDetails = planType === "yearly" 
+      ? { amount: 10000, duration: 12, name: "سنوي" } // 10 OMR in baisa
+      : { amount: 6000, duration: 6, name: "نصف سنوي" }; // 6 OMR in baisa
+
+    // Create session with Thawani API
+    const thawaniResponse = await fetch("https://checkout.thawani.om/api/v1/checkout/session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "thawani-api-key": thawaniSecretKey
+      },
+      body: JSON.stringify({
+        client_reference_id: `${userId}_${Date.now()}`,
+        mode: "payment",
+        products: [
+          {
+            name: `اشتراك Premium - ${planDetails.name}`,
+            quantity: 1,
+            unit_amount: planDetails.amount
+          }
+        ],
+        success_url: `${c.req.header("origin") || "https://your-site.com"}/payment/success?session_id={session_id}`,
+        cancel_url: `${c.req.header("origin") || "https://your-site.com"}/premium`,
+        metadata: {
+          user_id: userId,
+          plan_type: planType,
+          duration_months: planDetails.duration.toString(),
+          user_email: userEmail || "",
+          user_name: userName || ""
+        }
+      })
+    });
+
+    const result = await thawaniResponse.json();
+
+    if (!thawaniResponse.ok || !result.success) {
+      console.error("Thawani API error:", result);
+      return c.json({ 
+        success: false, 
+        error: "فشل إنشاء جلسة الدفع",
+        details: result 
+      }, 500);
+    }
+
+    // Return session data
+    return c.json({
+      success: true,
+      sessionId: result.data.session_id,
+      checkoutUrl: `https://checkout.thawani.om/pay/${result.data.session_id}?key=${Deno.env.get("THAWANI_PUBLISHABLE_KEY") || ""}`,
+      sessionData: result.data
+    });
+
+  } catch (error) {
+    console.error("Error creating payment session:", error);
+    return c.json({ 
+      success: false, 
+      error: "حدث خطأ أثناء إنشاء جلسة الدفع",
+      details: String(error) 
+    }, 500);
+  }
+});
+
+// Verify payment and activate subscription
+app.post("/make-server-8a20c00b/payment/verify", async (c) => {
+  try {
+    const { sessionId } = await c.req.json();
+
+    if (!sessionId) {
+      return c.json({ success: false, error: "Missing session ID" }, 400);
+    }
+
+    const thawaniSecretKey = Deno.env.get("THAWANI_SECRET_KEY");
+    if (!thawaniSecretKey) {
+      return c.json({ 
+        success: false, 
+        error: "نظام الدفع غير مكتمل الإعداد" 
+      }, 500);
+    }
+
+    // Get session details from Thawani
+    const thawaniResponse = await fetch(
+      `https://checkout.thawani.om/api/v1/checkout/session/${sessionId}`,
+      {
+        method: "GET",
+        headers: {
+          "thawani-api-key": thawaniSecretKey
+        }
+      }
+    );
+
+    const result = await thawaniResponse.json();
+
+    if (!thawaniResponse.ok || !result.success) {
+      console.error("Error verifying payment:", result);
+      return c.json({ 
+        success: false, 
+        error: "فشل التحقق من الدفع" 
+      }, 500);
+    }
+
+    const session = result.data;
+
+    // Check if payment was successful
+    if (session.payment_status !== "paid") {
+      return c.json({
+        success: false,
+        error: "الدفع غير مكتمل",
+        paymentStatus: session.payment_status
+      }, 400);
+    }
+
+    // Extract metadata
+    const metadata = session.metadata || {};
+    const userId = metadata.user_id;
+    const planType = metadata.plan_type;
+    const durationMonths = parseInt(metadata.duration_months || "6");
+
+    if (!userId) {
+      return c.json({ 
+        success: false, 
+        error: "معلومات المستخدم مفقودة" 
+      }, 400);
+    }
+
+    // Calculate subscription dates
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + durationMonths);
+
+    // Check if user already has an active subscription
+    const { data: existingSub, error: checkError } = await supabase
+      .from('premium_subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .single();
+
+    if (existingSub) {
+      // Update existing subscription (extend it)
+      const currentEndDate = new Date(existingSub.end_date);
+      const newEndDate = new Date(currentEndDate);
+      newEndDate.setMonth(newEndDate.getMonth() + durationMonths);
+
+      const { error: updateError } = await supabase
+        .from('premium_subscriptions')
+        .update({
+          end_date: newEndDate.toISOString(),
+          plan_type: planType,
+          payment_session_id: sessionId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingSub.id);
+
+      if (updateError) {
+        console.error("Error updating subscription:", updateError);
+        return c.json({ 
+          success: false, 
+          error: "فشل تحديث الاشتراك" 
+        }, 500);
+      }
+
+      return c.json({
+        success: true,
+        message: "تم تمديد اشتراكك بنجاح",
+        subscription: {
+          ...existingSub,
+          endDate: newEndDate.toISOString()
+        }
+      });
+    } else {
+      // Create new subscription
+      const { data: newSub, error: insertError } = await supabase
+        .from('premium_subscriptions')
+        .insert([{
+          user_id: userId,
+          plan_type: planType,
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+          status: 'active',
+          payment_session_id: sessionId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("Error creating subscription:", insertError);
+        return c.json({ 
+          success: false, 
+          error: "فشل إنشاء الاشتراك" 
+        }, 500);
+      }
+
+      return c.json({
+        success: true,
+        message: "تم تفعيل اشتراكك بنجاح",
+        subscription: toCamelCase(newSub)
+      });
+    }
+
+  } catch (error) {
+    console.error("Error verifying payment:", error);
+    return c.json({ 
+      success: false, 
+      error: "حدث خطأ أثناء التحقق من الدفع",
+      details: String(error) 
+    }, 500);
+  }
+});
+
 Deno.serve(app.fetch);

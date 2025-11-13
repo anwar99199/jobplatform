@@ -33,11 +33,7 @@ export function Header() {
     { title: "من نحن", path: "/about" },
     { title: "خدمات Premium", path: "/premium" },
     { title: "المسار الوظيفي", path: "/career-path" },
-    { title: "أهتم بالأخبار", path: "/news" },
-    { title: "المنح الدراسية المجانية", path: "/scholarships" },
-    { title: "فرص تدريب", path: "/training" },
-    { title: "وظائف الشركات", path: "/company-jobs" },
-    { title: "وظائف حكومية", path: "/government-jobs" }
+    { title: "اهم الأخبار", path: "/news" }
   ];
 
   return (

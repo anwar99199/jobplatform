@@ -5,10 +5,6 @@ export function Footer() {
   const footerLinks = [
     { title: "من نحن", href: "/about" },
     { title: "تواصل معنا", href: "#" },
-    { title: "وظائف حكومية", href: "/government-jobs" },
-    { title: "وظائف الشركات", href: "/company-jobs" },
-    { title: "فرص تدريب", href: "/training" },
-    { title: "المنح الدراسية المجانية", href: "/scholarships" },
     { title: "أهم الأخبار", href: "/news" },
     { title: "المسار الوظيفي", href: "/career-path" }
   ];
@@ -62,9 +58,6 @@ export function Footer() {
       <div className="bg-black py-6">
         <div className="container mx-auto px-4 text-center text-sm text-gray-400">
           <p>
-            هذا الموقع مستقل ولا يُقرّ أي جهة حكومية ... المحتوى المنشور يعبر عن آراء أصحابه ولا يعكس بالضرورة وجهة نظر الموقع
-          </p>
-          <p className="mt-2">
             جميع الحقوق محفوظة لموقع منصة عُمان للوظائف © 2023 – 
             <a href="#" className="text-blue-400 hover:underline mx-1">
               شروط و اتفاقية الاستخدام
