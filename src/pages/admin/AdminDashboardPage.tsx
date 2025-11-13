@@ -8,7 +8,8 @@ import {
   Settings,
   LogOut,
   Plus,
-  BarChart3
+  BarChart3,
+  Newspaper
 } from "lucide-react";
 import { getAdminStats } from "../../utils/adminApi";
 
@@ -53,6 +54,7 @@ export function AdminDashboardPage() {
 
   const handleLogout = () => {
     localStorage.removeItem("adminToken");
+    localStorage.removeItem("admin_access_token"); // حذف access_token أيضاً
     localStorage.removeItem("adminUser");
     navigate("/admin/login");
   };
@@ -86,9 +88,9 @@ export function AdminDashboardPage() {
 
   const quickActions = [
     { title: "إدارة الوظائف", desc: "إضافة، تعديل وحذف الوظائف", icon: Briefcase, path: "/admin/jobs" },
+    { title: "إدارة الأخبار", desc: "إضافة وتعديل أخبار سوق العمل", icon: Newspaper, path: "/admin/news" },
     { title: "إدارة المستخدمين", desc: "إدارة حسابات المستخدمين", icon: Users, path: "/admin/users" },
     { title: "الإحصائيات", desc: "عرض تقارير وإحصائيات مفصلة", icon: BarChart3, path: "/admin/analytics" },
-    { title: "الإعدادات", desc: "إعدادات النظام والموقع", icon: Settings, path: "/admin/settings" },
   ];
 
   if (!adminUser) {

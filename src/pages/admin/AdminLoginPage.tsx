@@ -23,6 +23,7 @@ export function AdminLoginPage() {
       if (response.success) {
         // حفظ التوكن في localStorage
         localStorage.setItem("adminToken", response.token);
+        localStorage.setItem("admin_access_token", response.token); // للاستخدام في News API وغيره
         localStorage.setItem("adminUser", JSON.stringify(response.user));
         navigate("/admin/dashboard");
       } else {

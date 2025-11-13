@@ -1,5 +1,4 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { Layout } from "./components/Layout";
 import { HomePage } from "./pages/HomePage";
 import { AboutPage } from "./pages/AboutPage";
 import { PremiumPage } from "./pages/PremiumPage";
@@ -10,13 +9,14 @@ import { TrainingPage } from "./pages/TrainingPage";
 import { CompanyJobsPage } from "./pages/CompanyJobsPage";
 import { GovernmentJobsPage } from "./pages/GovernmentJobsPage";
 import { JobDetailsPage } from "./pages/JobDetailsPage";
+import { ProfilePage } from "./pages/ProfilePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
-import { ProfilePage } from "./pages/ProfilePage";
 import { CVBuilderPage } from "./pages/CVBuilderPage";
 import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { DigitalCardPage } from "./pages/DigitalCardPage";
 import { PublicCardPage } from "./pages/PublicCardPage";
+import { Layout } from "./components/Layout";
 import { PaymentSuccessPage } from "./pages/PaymentSuccessPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
 import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
@@ -24,6 +24,7 @@ import { AdminJobsPage } from "./pages/admin/AdminJobsPage";
 import { AdminJobFormPage } from "./pages/admin/AdminJobFormPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminAnalyticsPage } from "./pages/admin/AdminAnalyticsPage";
+import { AdminNewsPage } from "./pages/admin/AdminNewsPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export default function App() {
@@ -87,9 +88,11 @@ export default function App() {
 
           {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/jobs" element={<AdminJobsPage />} />
           <Route path="/admin/jobs/:id" element={<AdminJobFormPage />} />
+          <Route path="/admin/news" element={<AdminNewsPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
           

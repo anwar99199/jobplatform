@@ -53,6 +53,17 @@ const initStorage = async () => {
       });
       console.log(`Bucket ${cardCVsBucket} created successfully`);
     }
+
+    // Create news images bucket (public)
+    const newsImagesBucket = "make-8a20c00b-news-images";
+    const newsBucketExists = buckets?.some(bucket => bucket.name === newsImagesBucket);
+    if (!newsBucketExists) {
+      await supabase.storage.createBucket(newsImagesBucket, {
+        public: true,
+        fileSizeLimit: 3145728 // 3MB
+      });
+      console.log(`Bucket ${newsImagesBucket} created successfully`);
+    }
   } catch (error) {
     console.error("Error initializing storage:", error);
   }
@@ -302,6 +313,106 @@ app.post("/make-server-8a20c00b/admin/login", async (c) => {
       return c.json({ success: false, message: "كلمة المرور غير صحيحة" }, 401);
     }
     
+    // Sign in with Supabase Auth لإنشاء session والحصول على access_token
+    const authSupabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // محاولة تسجيل دخول للمستخدم في Supabase Auth
+    const { data: signInData, error: signInError } = await authSupabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    let accessToken = '';
+    let userName = '';
+
+    if (signInError) {
+      console.log("Sign in failed, checking if user exists...", signInError.message);
+      
+      // جلب معلومات المستخدم من Auth
+      const { data: { users }, error: listError } = await authSupabase.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000
+      });
+      
+      const existingUser = users?.find(u => u.email === email);
+      
+      if (existingUser) {
+        // المستخدم موجود، نحدث كلمة المرور
+        console.log("User exists, updating password...");
+        const { data: updateData, error: updateError } = await authSupabase.auth.admin.updateUserById(
+          existingUser.id,
+          { 
+            password: password,
+            email_confirm: true,
+            user_metadata: { 
+              role: 'admin', 
+              name: allowedAdmin.email === 'as8543245@gmail.com' ? 'المدير العام' : 'أنور الرواحي'
+            }
+          }
+        );
+        
+        if (updateError) {
+          console.error("Error updating user password:", updateError);
+          accessToken = `admin_${Date.now()}_${Math.random().toString(36)}`;
+        } else {
+          // محاولة تسجيل دخول مرة أخرى بعد تحديث كلمة المرور
+          const { data: retrySignIn, error: retryError } = await authSupabase.auth.signInWithPassword({
+            email,
+            password
+          });
+          
+          if (retryError || !retrySignIn.session) {
+            console.error("Error signing in after password update:", retryError);
+            accessToken = `admin_${Date.now()}_${Math.random().toString(36)}`;
+          } else {
+            accessToken = retrySignIn.session.access_token;
+            console.log("Successfully signed in after password update");
+          }
+        }
+      } else {
+        // المستخدم غير موجود، نقوم بإنشائه
+        console.log("User doesn't exist, creating...");
+        const { data: createData, error: createError } = await authSupabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { 
+            role: 'admin', 
+            name: allowedAdmin.email === 'as8543245@gmail.com' ? 'المدير العام' : 'أنور الرواحي'
+          }
+        });
+        
+        if (createError) {
+          console.error("Error creating Auth user:", createError);
+          accessToken = `admin_${Date.now()}_${Math.random().toString(36)}`;
+        } else {
+          // تسجيل دخول بعد الإنشاء
+          const { data: newSignInData, error: newSignInError } = await authSupabase.auth.signInWithPassword({
+            email,
+            password
+          });
+          
+          if (newSignInError || !newSignInData.session) {
+            console.error("Error signing in after creation:", newSignInError);
+            accessToken = `admin_${Date.now()}_${Math.random().toString(36)}`;
+          } else {
+            accessToken = newSignInData.session.access_token;
+            console.log("Successfully signed in after user creation");
+          }
+        }
+      }
+    } else if (signInData.session) {
+      accessToken = signInData.session.access_token;
+      console.log("Successfully signed in with existing credentials");
+    } else {
+      // إذا لم يوجد session، نستخدم token بديل
+      console.log("No session returned, using fallback token");
+      accessToken = `admin_${Date.now()}_${Math.random().toString(36)}`;
+    }
+    
     // Get admin from Supabase table
     const { data: admin, error } = await supabase
       .from('admins')
@@ -311,24 +422,23 @@ app.post("/make-server-8a20c00b/admin/login", async (c) => {
     
     if (error || !admin) {
       console.error("Error fetching admin from Supabase:", error);
-      return c.json({ success: false, message: "حساب المدير غير موجود" }, 404);
+      userName = allowedAdmin.email === 'as8543245@gmail.com' ? 'المدير العام' : 'أنور الرواحي';
+    } else {
+      userName = admin.name;
+      
+      // Update last login
+      await supabase
+        .from('admins')
+        .update({ last_login: new Date().toISOString() })
+        .eq('email', email);
     }
-    
-    // Update last login
-    await supabase
-      .from('admins')
-      .update({ last_login: new Date().toISOString() })
-      .eq('email', email);
-    
-    // Generate a simple token (in production, use JWT)
-    const token = `admin_${Date.now()}_${Math.random().toString(36)}`;
     
     return c.json({
       success: true,
-      token,
+      token: accessToken, // استخدام access_token من Supabase Auth أو token بديل
       user: {
-        email: admin.email,
-        name: admin.name,
+        email: email,
+        name: userName,
         role: "admin"
       }
     });
@@ -1853,6 +1963,283 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
       error: "حدث خطأ أثناء التحقق من الدفع",
       details: String(error) 
     }, 500);
+  }
+});
+
+// ============================================
+// NEWS MANAGEMENT
+// ============================================
+
+// Get all news articles (Public - no auth required)
+app.get("/make-server-8a20c00b/news", async (c) => {
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    const { data, error } = await supabase
+      .from('news')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.error("Error fetching news from Supabase:", error);
+      return c.json({ success: false, error: error.message }, 500);
+    }
+
+    return c.json({ 
+      success: true, 
+      news: data || []
+    });
+  } catch (error) {
+    console.error("Error fetching news:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Get single news article (Public)
+app.get("/make-server-8a20c00b/news/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    const { data, error } = await supabase
+      .from('news')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !data) {
+      return c.json({ success: false, error: "الخبر غير موجود" }, 404);
+    }
+
+    return c.json({ 
+      success: true, 
+      news: data
+    });
+  } catch (error) {
+    console.error("Error fetching news:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Upload news image (Admin only)
+app.post("/make-server-8a20c00b/admin/upload-news-image", async (c) => {
+  try {
+    // Get access token from Authorization header
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized - Admin access required" }, 401);
+    }
+
+    // Verify user is admin
+    const adminEmails = ['as8543245@gmail.com', 'anwaralrawahi459@gmail.com'];
+    if (!adminEmails.includes(user.email || '')) {
+      return c.json({ success: false, error: "Unauthorized - Admin access required" }, 401);
+    }
+
+    const formData = await c.req.formData();
+    const file = formData.get('file') as File;
+    
+    if (!file) {
+      return c.json({ success: false, error: "لم يتم تحديد صورة" }, 400);
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      return c.json({ success: false, error: "يرجى اختيار صورة فقط" }, 400);
+    }
+
+    // Check file size (3MB max for news images)
+    if (file.size > 3 * 1024 * 1024) {
+      return c.json({ success: false, error: "حجم الصورة يجب أن يكون أقل من 3 ميجابايت" }, 400);
+    }
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const extension = file.name.split('.').pop() || 'jpg';
+    const filename = `news_${timestamp}.${extension}`;
+    
+    const bucketName = 'make-8a20c00b-news-images';
+    const filePath = filename;
+
+    // Convert File to ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    // Upload file to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, uint8Array, {
+        contentType: file.type,
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error("Error uploading news image:", uploadError);
+      return c.json({ success: false, error: "فشل رفع الصورة" }, 500);
+    }
+
+    // Get public URL for the image
+    const { data: urlData } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(filePath);
+
+    return c.json({ 
+      success: true, 
+      imageUrl: urlData.publicUrl,
+      message: "تم رفع الصورة بنجاح"
+    });
+
+  } catch (error) {
+    console.error("Error in upload news image route:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Create news article (Admin only)
+app.post("/make-server-8a20c00b/admin/news", async (c) => {
+  try {
+    const { title, summary, content, imageUrl, date } = await c.req.json();
+
+    if (!title || !summary) {
+      return c.json({ success: false, error: "العنوان والملخص مطلوبان" }, 400);
+    }
+
+    // Get access token from Authorization header
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+        }
+      }
+    );
+
+    const newsData = {
+      title,
+      summary,
+      content: content || summary,
+      image_url: imageUrl || null,
+      date: date || new Date().toISOString().split('T')[0],
+    };
+
+    const { data, error } = await supabase
+      .from('news')
+      .insert([newsData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating news in Supabase:", error);
+      return c.json({ success: false, error: error.message }, 500);
+    }
+
+    return c.json({ 
+      success: true, 
+      news: data
+    });
+  } catch (error) {
+    console.error("Error creating news:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Update news article (Admin only)
+app.put("/make-server-8a20c00b/admin/news/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const { title, summary, content, imageUrl, date } = await c.req.json();
+
+    // Get access token from Authorization header
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+        }
+      }
+    );
+
+    const newsData = {
+      title,
+      summary,
+      content,
+      image_url: imageUrl || null,
+      date,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('news')
+      .update(newsData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating news in Supabase:", error);
+      return c.json({ success: false, error: error.message }, 500);
+    }
+
+    if (!data) {
+      return c.json({ success: false, error: "الخبر غير موجود" }, 404);
+    }
+
+    return c.json({ 
+      success: true, 
+      news: data
+    });
+  } catch (error) {
+    console.error("Error updating news:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Delete news article (Admin only)
+app.delete("/make-server-8a20c00b/admin/news/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+    
+    // Get access token from Authorization header
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+        }
+      }
+    );
+
+    const { error } = await supabase
+      .from('news')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error deleting news from Supabase:", error);
+      return c.json({ success: false, error: error.message }, 500);
+    }
+
+    return c.json({ success: true, message: "تم حذف الخبر بنجاح" });
+  } catch (error) {
+    console.error("Error deleting news:", error);
+    return c.json({ success: false, error: String(error) }, 500);
   }
 });
 
