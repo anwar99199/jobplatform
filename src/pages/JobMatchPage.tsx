@@ -1,8 +1,51 @@
-import { ArrowRight, TrendingUp, CheckCircle, Target, Lightbulb, BarChart3, Sparkles, Home } from "lucide-react";
+import { ArrowRight, TrendingUp, CheckCircle, Target, Lightbulb, BarChart3, Sparkles, Home, Lock, Crown } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { supabase } from "../utils/supabase/client";
 
 export function JobMatchPage() {
+  const navigate = useNavigate();
+  const [isPremium, setIsPremium] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // التحقق من حالة المستخدم
+  useEffect(() => {
+    checkUserStatus();
+  }, []);
+
+  const checkUserStatus = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user?.id) {
+        setIsLoggedIn(false);
+        setIsPremium(false);
+        setCheckingStatus(false);
+        return;
+      }
+
+      setIsLoggedIn(true);
+
+      // التحقق من وجود اشتراك Premium نشط
+      const { data: subscription } = await supabase
+        .from('premium_subscriptions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', 'active')
+        .single();
+
+      setIsPremium(!!subscription);
+      setCheckingStatus(false);
+    } catch (error) {
+      console.log('Error checking user status:', error);
+      setIsLoggedIn(false);
+      setIsPremium(false);
+      setCheckingStatus(false);
+    }
+  };
+
   const features = [
     {
       icon: <BarChart3 className="w-12 h-12 text-red-600" />,
@@ -26,6 +69,137 @@ export function JobMatchPage() {
     }
   ];
 
+  // Loading state
+  if (checkingStatus) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600 text-xl">جاري التحميل...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // غير مسجل دخول - يطلب منه تسجيل الدخول
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        {/* Header */}
+        <div className="bg-white shadow-sm border-b border-gray-200">
+          <div className="container mx-auto px-4 py-6">
+            <Link to="/premium" className="inline-flex items-center text-red-600 hover:text-red-700 mb-4">
+              <ArrowRight className="w-4 h-4 ml-2" />
+              العودة إلى خدمات Premium
+            </Link>
+          </div>
+        </div>
+
+        {/* Access Denied - Not Logged In */}
+        <div className="container mx-auto px-4 py-12">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
+              <div className="inline-flex items-center justify-center w-24 h-24 bg-red-100 rounded-full mb-6">
+                <Lock className="w-12 h-12 text-red-600" />
+              </div>
+              
+              <h1 className="text-3xl mb-4 text-gray-800">يجب تسجيل الدخول أولاً</h1>
+              <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+                هذه الخدمة متاحة فقط للمستخدمين المسجلين. يرجى تسجيل الدخول للمتابعة.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link to="/login">
+                  <Button className="bg-red-600 text-white hover:bg-red-700 px-8 py-6 text-lg">
+                    تسجيل الدخول
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button className="bg-gray-200 text-gray-800 hover:bg-gray-300 px-8 py-6 text-lg">
+                    إنشاء حساب جديد
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // مسجل دخول لكن غير مشترك في Premium
+  if (!isPremium) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        {/* Header */}
+        <div className="bg-white shadow-sm border-b border-gray-200">
+          <div className="container mx-auto px-4 py-6">
+            <Link to="/premium" className="inline-flex items-center text-red-600 hover:text-red-700 mb-4">
+              <ArrowRight className="w-4 h-4 ml-2" />
+              العودة إلى خدمات Premium
+            </Link>
+          </div>
+        </div>
+
+        {/* Access Denied - Not Premium */}
+        <div className="container mx-auto px-4 py-12">
+          <div className="max-w-3xl mx-auto">
+            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl shadow-xl p-12 text-center border-2 border-yellow-300">
+              <div className="inline-flex items-center justify-center w-24 h-24 bg-yellow-500 rounded-full mb-6">
+                <Crown className="w-12 h-12 text-white" />
+              </div>
+              
+              <h1 className="text-3xl mb-4 text-gray-800">هذه الخدمة حصرية للمشتركين في Premium</h1>
+              <p className="text-xl text-gray-700 mb-8 leading-relaxed">
+                ميزة <strong>نسبة التوافق مع الوظائف</strong> متاحة فقط للمشتركين في باقة Premium.
+              </p>
+
+              <div className="bg-white rounded-xl p-6 mb-8 text-right">
+                <h3 className="text-xl mb-4 text-gray-800">ماذا ستحصل عند الاشتراك؟</h3>
+                <ul className="space-y-3">
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
+                    <span className="text-gray-700">نسبة توافق تلقائية على جميع بطاقات الوظائف</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
+                    <span className="text-gray-700">تحليل دقيق لمهاراتك وخبراتك</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
+                    <span className="text-gray-700">توصيات ذكية لتحسين فرص القبول</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
+                    <span className="text-gray-700">توليد Cover Letter و CV بالذكاء الاصطناعي</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
+                    <span className="text-gray-700">بطاقة رقمية احترافية</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link to="/premium">
+                  <Button className="bg-red-600 text-white hover:bg-red-700 px-10 py-6 text-xl flex items-center gap-2">
+                    <Crown className="w-6 h-6" />
+                    اشترك الآن في Premium
+                  </Button>
+                </Link>
+                <Link to="/">
+                  <Button className="bg-gray-200 text-gray-800 hover:bg-gray-300 px-8 py-6 text-lg">
+                    العودة للصفحة الرئيسية
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // مستخدم Premium - عرض الصفحة الكاملة
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
@@ -41,7 +215,7 @@ export function JobMatchPage() {
             </div>
             <div>
               <h1 className="text-3xl text-gray-800">نسبة التوافق مع الوظائف</h1>
-              <p className="text-gray-600">اعرف مدى توافق مهاراتك مع متطلبات كل وظيفة قبل التقديم</p>
+              <p className="text-gray-600">اعرف مدى تواف�� مهاراتك مع متطلبات كل وظيفة قبل التقديم</p>
             </div>
           </div>
         </div>
