@@ -1,6 +1,6 @@
-import { Calendar, ArrowLeft, TrendingUp } from "lucide-react";
+import { Calendar, ArrowLeft, TrendingUp, AlertCircle, User } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { getJobs } from "../utils/api";
 import { Button } from "./ui/button";
 import { supabase } from "../utils/supabase/client";
@@ -85,13 +85,18 @@ export function JobsSection() {
         .single();
 
       if (profileData && !error) {
-        setUserProfile({
-          skills: profileData.skills,
-          experience: profileData.experience,
-          specialty: profileData.specialty,
-          location: profileData.location,
-          education: profileData.education
-        });
+        // التحقق من أن البروفايل يحتوي على البيانات الأساسية
+        const hasMinimumData = profileData.skills && profileData.experience && profileData.specialty;
+        
+        if (hasMinimumData) {
+          setUserProfile({
+            skills: profileData.skills,
+            experience: profileData.experience,
+            specialty: profileData.specialty,
+            location: profileData.location,
+            education: profileData.education
+          });
+        }
       }
     } catch (err) {
       console.log("Error loading user profile:", err);
@@ -226,6 +231,33 @@ export function JobsSection() {
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-12">
+      {/* تنبيه إكمال البروفايل للمستخدمين Premium */}
+      {isPremium && !userProfile && (
+        <div className="border border-blue-200 rounded-lg p-6 bg-gradient-to-r from-blue-50 to-blue-100">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0">
+              <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl text-blue-900 mb-2">🎯 ميزة نسبة التوافق مع الوظائف</h3>
+              <p className="text-blue-800 mb-4 leading-relaxed">
+                نقوم بتحليل مهاراتك وخبراتك ومقارنتها بمتطلبات الوظيفة لنعطيك نسبة التوافق المئوية.
+                <br />
+                <strong>يرجى إكمال الملف الشخصي لرؤية نسب التوافق على جميع الوظائف!</strong>
+              </p>
+              <Link to="/profile">
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  <span>إكمال الملف الشخصي الآن</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* وظائف اليوم */}
       {todayJobs.length > 0 && (
         <div className="border border-gray-300 rounded-lg p-8 bg-white">

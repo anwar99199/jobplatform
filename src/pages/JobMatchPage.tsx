@@ -81,10 +81,34 @@ export function JobMatchPage() {
         {/* CTA Section */}
         <div className="max-w-4xl mx-auto">
           <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-2xl shadow-xl p-8 md:p-12 text-center text-white">
-            <h2 className="text-3xl mb-4">هذه الخدمة متاحة في صفحة الوظائف</h2>
-            <p className="text-xl mb-8 text-red-100">
-              شاهد نسبة التوافق مباشرة على كل بطاقة وظيفة
+            <h2 className="text-3xl mb-4">هذه الخدمة متاحة مباشرة على بطاقات الوظائف</h2>
+            <p className="text-xl mb-2 text-red-100">
+              شاهد نسبة التوافق تلقائياً على كل بطاقة وظيفة
             </p>
+            <p className="text-lg mb-8 text-red-100">
+              نقوم بتحليل مهاراتك وخبراتك ومقارنتها بمتطلبات الوظيفة لنعطيك نسبة التوافق المئوية
+            </p>
+            
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-8 text-right">
+              <h3 className="text-xl mb-4 flex items-center gap-2">
+                <CheckCircle className="w-6 h-6" />
+                متطلبات الاستخدام:
+              </h3>
+              <ul className="space-y-3 text-red-50">
+                <li className="flex items-start gap-3">
+                  <span className="text-2xl">✅</span>
+                  <span className="text-lg">تسجيل الدخول بحساب Premium نشط</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-2xl">✅</span>
+                  <span className="text-lg">إكمال الملف الشخصي (المهارات، الخبرة، التخصص)</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-2xl">✅</span>
+                  <span className="text-lg">الانتقال إلى الصفحة الرئيسية لرؤية النسب</span>
+                </li>
+              </ul>
+            </div>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link to="/">
@@ -93,10 +117,10 @@ export function JobMatchPage() {
                   الانتقال إلى الصفحة الرئيسية
                 </Button>
               </Link>
-              <Link to="/company-jobs">
+              <Link to="/profile">
                 <Button className="bg-yellow-500 text-white hover:bg-yellow-600 px-8 py-6 text-lg">
-                  <TrendingUp className="ml-2 w-5 h-5" />
-                  تصفح وظائف الشركات
+                  <Target className="ml-2 w-5 h-5" />
+                  إكمال الملف الشخصي
                 </Button>
               </Link>
             </div>

@@ -1,13 +1,47 @@
 import { Crown, CheckCircle, Star, Zap, FileText, Target, Sparkles, CreditCard, TrendingUp } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { supabase } from "../utils/supabase/client";
 import { toast } from "sonner@2.0.3";
 
 export function PremiumPage() {
   const [loading, setLoading] = useState<string | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+
+  // التحقق من حالة الاشتراك
+  useEffect(() => {
+    checkPremiumStatus();
+  }, []);
+
+  const checkPremiumStatus = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user?.id) {
+        setIsPremium(false);
+        setCheckingStatus(false);
+        return;
+      }
+
+      // التحقق من وجود اشتراك نشط
+      const { data: subscription } = await supabase
+        .from('premium_subscriptions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', 'active')
+        .single();
+
+      setIsPremium(!!subscription);
+      setCheckingStatus(false);
+    } catch (error) {
+      console.log('Error checking premium status:', error);
+      setIsPremium(false);
+      setCheckingStatus(false);
+    }
+  };
 
   const handleSelectPlan = async (planType: "semi-annual" | "yearly") => {
     try {
@@ -148,6 +182,95 @@ export function PremiumPage() {
     }
   ];
 
+  // Loading state
+  if (checkingStatus) {
+    return (
+      <div className="container mx-auto px-4 py-12">
+        <div className="text-center">
+          <p className="text-gray-600">جاري التحميل...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Premium User View - عرض الخدمات فقط بدون الباقات
+  if (isPremium) {
+    return (
+      <div className="container mx-auto px-4 py-12">
+        {/* تنبيه الاشتراك النشط */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-2xl p-8 shadow-lg">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0">
+                <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-10 h-10 text-white" />
+                </div>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-3xl text-green-900 mb-2 flex items-center gap-2">
+                  <Crown className="w-8 h-8 text-yellow-500" />
+                  أنت مشترك في الباقة المميزة
+                </h2>
+                <p className="text-xl text-green-800">
+                  استمتع بجميع الخدمات الحصرية أدناه!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* عنوان الخدمات */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl mb-4 text-gray-800">الخدمات المتاحة لك الآن</h1>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            جميع الخدمات Premium جاهزة للاستخدام
+          </p>
+        </div>
+
+        {/* Features Grid - بدون أزرار الاشتراك */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-8 mb-16 max-w-6xl mx-auto">
+          {premiumFeatures.map((feature, index) => (
+            <Link to={feature.link} key={index}>
+              <div className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-all hover:scale-105 cursor-pointer h-full border-2 border-green-200">
+                <div className="flex justify-center mb-6">
+                  {feature.icon}
+                </div>
+                <h3 className="text-2xl mb-4 text-gray-800 text-center">{feature.title}</h3>
+                <p className="text-gray-600 text-center mb-6">{feature.description}</p>
+                <ul className="space-y-3">
+                  {feature.features.map((feat, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <span className="text-gray-700">
+                        {feat}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="text-center mt-6">
+                  <span className="text-green-600 hover:text-green-700 font-medium inline-flex items-center gap-2 text-lg">
+                    استخدم الأداة الآن
+                    <Sparkles className="w-5 h-5" />
+                  </span>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        {/* نصيحة */}
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 text-center">
+            <p className="text-lg text-blue-900">
+              💡 <strong>نصيحة:</strong> يمكنك الوصول لهذه الخدمات في أي وقت من القائمة العلوية
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Non-Premium User View - عرض كامل مع الباقات
   return (
     <div className="container mx-auto px-4 py-12">
       {/* Hero Section */}
@@ -159,9 +282,6 @@ export function PremiumPage() {
         <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-6">
           ارتقِ بمستوى بحثك عن الوظائف مع خدماتنا المتقدمة
         </p>
-        <Button className="bg-red-600 text-white hover:bg-red-700 px-8 py-6">
-          اشترك الآن وافتح جميع الميزات
-        </Button>
       </div>
 
       {/* Features Grid */}
