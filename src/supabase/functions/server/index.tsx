@@ -180,7 +180,7 @@ app.get("/make-server-8a20c00b/jobs/:id", async (c) => {
 app.post("/make-server-8a20c00b/jobs", async (c) => {
   try {
     const body = await c.req.json();
-    const { title, company, location, type, description, applicationUrl } = body;
+    const { title, company, location, type, description, requirements, applicationUrl } = body;
     
     if (!title || !company) {
       return c.json({ success: false, error: "Title and company are required" }, 400);
@@ -194,6 +194,7 @@ app.post("/make-server-8a20c00b/jobs", async (c) => {
       location: location || "مسقط",
       type: type || "دوام كامل",
       description: description || "",
+      requirements: requirements || "",
       applicationUrl: applicationUrl || "",
       date: new Date().toISOString().split("T")[0]
     };
@@ -242,7 +243,7 @@ app.put("/make-server-8a20c00b/admin/jobs/:id", async (c) => {
   try {
     const id = c.req.param("id");
     const body = await c.req.json();
-    const { title, company, location, type, description, date, applicationUrl } = body;
+    const { title, company, location, type, description, requirements, date, applicationUrl } = body;
     
     console.log("Updating job:", id, { title, company });
     
@@ -256,6 +257,7 @@ app.put("/make-server-8a20c00b/admin/jobs/:id", async (c) => {
       location: location || "مسقط",
       type: type || "دوام كامل",
       description: description || "",
+      requirements: requirements || "",
       application_url: applicationUrl || "",
       date: date || new Date().toISOString().split("T")[0]
     };
@@ -528,7 +530,7 @@ app.post("/make-server-8a20c00b/admin/register", async (c) => {
 app.post("/make-server-8a20c00b/admin/jobs", async (c) => {
   try {
     const body = await c.req.json();
-    const { title, company, location, type, description, date, applicationUrl } = body;
+    const { title, company, location, type, description, requirements, date, applicationUrl } = body;
     
     console.log("Creating job with data:", { title, company, location, type });
     
@@ -542,6 +544,7 @@ app.post("/make-server-8a20c00b/admin/jobs", async (c) => {
       location: location || "مسقط",
       type: type || "دوام كامل",
       description: description || "",
+      requirements: requirements || "",
       application_url: applicationUrl || "",
       date: date || new Date().toISOString().split("T")[0]
     };
@@ -1732,10 +1735,10 @@ app.put("/make-server-8a20c00b/digital-card", async (c) => {
 });
 
 // ============================================
-// THAWANI PAYMENT INTEGRATION
+// AMWAL PAY PAYMENT INTEGRATION
 // ============================================
 
-// Create payment session with Thawani
+// Create payment session with Amwal Pay
 app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
   try {
     const { planType, userId, userEmail, userName } = await c.req.json();
@@ -1745,54 +1748,55 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
       return c.json({ success: false, error: "Missing required fields" }, 400);
     }
 
-    // Get Thawani API key from environment
-    const thawaniSecretKey = Deno.env.get("THAWANI_SECRET_KEY");
-    if (!thawaniSecretKey) {
-      console.log("THAWANI_SECRET_KEY not configured - payment system not available");
+    // Get Amwal Pay API key from environment
+    const amwalMerchantId = Deno.env.get("AMWAL_MERCHANT_ID");
+    const amwalApiKey = Deno.env.get("AMWAL_API_KEY");
+    
+    if (!amwalMerchantId || !amwalApiKey) {
+      console.log("AMWAL credentials not configured - payment system not available");
       return c.json({ 
         success: false, 
-        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة مفتاح THAWANI_SECRET_KEY في إعدادات المشروع." 
+        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة مفاتيح Amwal Pay في إعدادات المشروع." 
       }, 400);
     }
 
     // Determine plan details
     const planDetails = planType === "yearly" 
-      ? { amount: 10000, duration: 12, name: "سنوي" } // 10 OMR in baisa
-      : { amount: 6000, duration: 6, name: "نصف سنوي" }; // 6 OMR in baisa
+      ? { amount: 10.00, duration: 12, name: "سنوي" } // 10 OMR
+      : { amount: 6.00, duration: 6, name: "نصف سنوي" }; // 6 OMR
 
-    // Create session with Thawani API
-    const thawaniResponse = await fetch("https://checkout.thawani.om/api/v1/checkout/session", {
+    // Generate unique transaction reference
+    const transactionRef = `OMANJOBS_${userId}_${Date.now()}`;
+
+    // Create payment request with Amwal Pay
+    const amwalResponse = await fetch("https://api.amwal.tech/v1/transactions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "thawani-api-key": thawaniSecretKey
+        "Authorization": `Bearer ${amwalApiKey}`,
+        "X-Merchant-ID": amwalMerchantId
       },
       body: JSON.stringify({
-        client_reference_id: `${userId}_${Date.now()}`,
-        mode: "payment",
-        products: [
-          {
-            name: `اشتراك Premium - ${planDetails.name}`,
-            quantity: 1,
-            unit_amount: planDetails.amount
-          }
-        ],
-        success_url: `${c.req.header("origin") || "https://your-site.com"}/payment/success?session_id={session_id}`,
+        amount: planDetails.amount,
+        currency: "OMR",
+        description: `اشتراك Premium - ${planDetails.name}`,
+        merchant_reference: transactionRef,
+        customer_email: userEmail || "",
+        customer_name: userName || "",
+        callback_url: `${c.req.header("origin") || "https://your-site.com"}/payment/success`,
         cancel_url: `${c.req.header("origin") || "https://your-site.com"}/premium`,
         metadata: {
           user_id: userId,
           plan_type: planType,
-          duration_months: planDetails.duration.toString(),
-          user_email: userEmail || "",
-          user_name: userName || ""
+          duration_months: planDetails.duration.toString()
         }
       })
     });
 
-    const result = await thawaniResponse.json();
+    const result = await amwalResponse.json();
 
-    if (!thawaniResponse.ok || !result.success) {
-      console.error("Thawani API error:", result);
+    if (!amwalResponse.ok || result.status !== "success") {
+      console.error("Amwal Pay API error:", result);
       return c.json({ 
         success: false, 
         error: "فشل إنشاء جلسة الدفع",
@@ -1800,12 +1804,24 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
       }, 500);
     }
 
-    // Return session data
+    // Store transaction reference in database for verification
+    await supabase
+      .from('payment_sessions')
+      .insert([{
+        transaction_ref: transactionRef,
+        user_id: userId,
+        plan_type: planType,
+        amount: planDetails.amount,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      }]);
+
+    // Return payment URL
     return c.json({
       success: true,
-      sessionId: result.data.session_id,
-      checkoutUrl: `https://checkout.thawani.om/pay/${result.data.session_id}?key=${Deno.env.get("THAWANI_PUBLISHABLE_KEY") || ""}`,
-      sessionData: result.data
+      transactionRef: transactionRef,
+      checkoutUrl: result.data.payment_url,
+      transactionData: result.data
     });
 
   } catch (error) {
@@ -1818,38 +1834,41 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
   }
 });
 
-// Verify payment and activate subscription
+// Verify payment and activate subscription with Amwal Pay
 app.post("/make-server-8a20c00b/payment/verify", async (c) => {
   try {
-    const { sessionId } = await c.req.json();
+    const { transactionRef } = await c.req.json();
 
-    if (!sessionId) {
-      return c.json({ success: false, error: "Missing session ID" }, 400);
+    if (!transactionRef) {
+      return c.json({ success: false, error: "Missing transaction reference" }, 400);
     }
 
-    const thawaniSecretKey = Deno.env.get("THAWANI_SECRET_KEY");
-    if (!thawaniSecretKey) {
-      console.log("THAWANI_SECRET_KEY not configured - payment verification not available");
+    const amwalMerchantId = Deno.env.get("AMWAL_MERCHANT_ID");
+    const amwalApiKey = Deno.env.get("AMWAL_API_KEY");
+    
+    if (!amwalMerchantId || !amwalApiKey) {
+      console.log("AMWAL credentials not configured - payment verification not available");
       return c.json({ 
         success: false, 
-        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة مفتاح THAWANI_SECRET_KEY." 
+        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة مفاتيح Amwal Pay." 
       }, 400);
     }
 
-    // Get session details from Thawani
-    const thawaniResponse = await fetch(
-      `https://checkout.thawani.om/api/v1/checkout/session/${sessionId}`,
+    // Get transaction details from Amwal Pay
+    const amwalResponse = await fetch(
+      `https://api.amwal.tech/v1/transactions/${transactionRef}`,
       {
         method: "GET",
         headers: {
-          "thawani-api-key": thawaniSecretKey
+          "Authorization": `Bearer ${amwalApiKey}`,
+          "X-Merchant-ID": amwalMerchantId
         }
       }
     );
 
-    const result = await thawaniResponse.json();
+    const result = await amwalResponse.json();
 
-    if (!thawaniResponse.ok || !result.success) {
+    if (!amwalResponse.ok || result.status !== "success") {
       console.error("Error verifying payment:", result);
       return c.json({ 
         success: false, 
@@ -1857,22 +1876,35 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
       }, 500);
     }
 
-    const session = result.data;
+    const transaction = result.data;
 
     // Check if payment was successful
-    if (session.payment_status !== "paid") {
+    if (transaction.payment_status !== "completed" && transaction.payment_status !== "success") {
       return c.json({
         success: false,
-        error: "الدفع غير مكتمل",
-        paymentStatus: session.payment_status
+        error: "ا��دفع غير مكتمل",
+        paymentStatus: transaction.payment_status
       }, 400);
     }
 
-    // Extract metadata
-    const metadata = session.metadata || {};
-    const userId = metadata.user_id;
-    const planType = metadata.plan_type;
-    const durationMonths = parseInt(metadata.duration_months || "6");
+    // Get payment session from database
+    const { data: paymentSession, error: sessionError } = await supabase
+      .from('payment_sessions')
+      .select('*')
+      .eq('transaction_ref', transactionRef)
+      .single();
+
+    if (sessionError || !paymentSession) {
+      console.error("Payment session not found:", sessionError);
+      return c.json({ 
+        success: false, 
+        error: "جلسة الدفع غير موجودة" 
+      }, 400);
+    }
+
+    const userId = paymentSession.user_id;
+    const planType = paymentSession.plan_type;
+    const durationMonths = planType === "yearly" ? 12 : 6;
 
     if (!userId) {
       return c.json({ 
@@ -1905,7 +1937,7 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
         .update({
           end_date: newEndDate.toISOString(),
           plan_type: planType,
-          payment_session_id: sessionId,
+          payment_session_id: transactionRef,
           updated_at: new Date().toISOString()
         })
         .eq('id', existingSub.id);
@@ -1936,7 +1968,7 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
           status: 'active',
-          payment_session_id: sessionId,
+          payment_session_id: transactionRef,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }])

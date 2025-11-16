@@ -86,7 +86,7 @@ export function PremiumPage() {
         return;
       }
 
-      // Redirect to Thawani checkout
+      // Redirect to Amwal Pay checkout
       window.location.href = result.checkoutUrl;
 
     } catch (error) {
@@ -385,12 +385,12 @@ export function PremiumPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-xl mb-3 text-red-600">كيف يمكنني الاشتراك في الخدمة؟</h3>
             <p className="text-gray-700">
-              يمكنك اختيار الباقة المناسبة والضغط على "اختر هذه الباقة"، ثم إكمال عملية الدفع الآمنة.
+              يمكنك اختيار الباقة المناسبة والضغط على "اختر هذه الباقة"، ثم إكمال عملية الدفع الآمن��.
             </p>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-xl mb-3 text-red-600">هل يمكنني إلغا�� الاشتراك في أي وقت؟</h3>
+            <h3 className="text-xl mb-3 text-red-600">هل يمكنني إلغا الاشتراك في أي وقت؟</h3>
             <p className="text-gray-700">
               نعم، يمكنك إلغاء الاشتراك في أي وقت. سيظل إعلانك نشطاً حتى نهاية المدة المدفوعة.
             </p>

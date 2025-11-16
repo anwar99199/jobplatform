@@ -12,6 +12,7 @@ interface Job {
   location?: string;
   type?: string;
   description?: string;
+  requirements?: string;
   applicationUrl?: string;
 }
 
@@ -131,27 +132,23 @@ export function JobDetailsPage() {
         </div>
 
         {/* Job Requirements Section */}
-        <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
-          <h2 className="text-2xl mb-4 text-red-600">المتطلبات</h2>
-          <ul className="space-y-3 text-gray-700">
-            <li className="flex items-start gap-2">
-              <span className="text-red-600 mt-1">•</span>
-              <span>مؤهل علمي مناسب للوظيفة</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-red-600 mt-1">•</span>
-              <span>خبرة عملية في المجال</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-red-600 mt-1">•</span>
-              <span>مهارات تواصل جيدة</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-red-600 mt-1">•</span>
-              <span>القدرة على العمل ضمن فريق</span>
-            </li>
-          </ul>
-        </div>
+        {job.requirements && job.requirements.trim() && (
+          <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
+            <h2 className="text-2xl mb-4 text-red-600">المتطلبات</h2>
+            <div className="space-y-3 text-gray-700">
+              {job.requirements.split('\n').filter(line => line.trim()).map((requirement, index) => {
+                // Remove bullet points if they exist (•, -, *)
+                const cleanRequirement = requirement.replace(/^[•\-\*]\s*/, '').trim();
+                return cleanRequirement ? (
+                  <div key={index} className="flex items-start gap-2">
+                    <span className="text-red-600 mt-1">•</span>
+                    <span>{cleanRequirement}</span>
+                  </div>
+                ) : null;
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Application Section */}
         <div className="bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg shadow-lg p-8 text-center">

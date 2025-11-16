@@ -58,14 +58,14 @@ export function Footer() {
       <div className="bg-black py-6">
         <div className="container mx-auto px-4 text-center text-sm text-gray-400">
           <p>
-            جميع الحقوق محفوظة لموقع منصة عُمان للوظائف © 2023 – 
-            <a href="#" className="text-blue-400 hover:underline mx-1">
+            جميع الحقوق محفوظة لموقع منصة عُمان للوظائف © {new Date().getFullYear()} – 
+            <Link to="/terms-of-service" className="text-blue-400 hover:underline mx-1">
               شروط و اتفاقية الاستخدام
-            </a>
+            </Link>
             - 
-            <a href="#" className="text-blue-400 hover:underline mx-1">
+            <Link to="/privacy-policy" className="text-blue-400 hover:underline mx-1">
               سياسة الخصوصية
-            </a>
+            </Link>
             <span className="mx-2">-</span>
             <Link to="/admin/login" className="text-gray-600 hover:text-red-400 transition-colors mx-1">
               •

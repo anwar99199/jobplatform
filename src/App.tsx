@@ -18,6 +18,8 @@ import { DigitalCardPage } from "./pages/DigitalCardPage";
 import { PublicCardPage } from "./pages/PublicCardPage";
 import { JobMatchPage } from "./pages/JobMatchPage";
 import { ContactPage } from "./pages/ContactPage";
+import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
+import { TermsOfServicePage } from "./pages/TermsOfServicePage";
 import { Layout } from "./components/Layout";
 import { PaymentSuccessPage } from "./pages/PaymentSuccessPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
@@ -57,6 +59,8 @@ export default function App() {
                 <ProfilePage />
               </ProtectedRoute>
             } />
+            <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="terms-of-service" element={<TermsOfServicePage />} />
           </Route>
 
           {/* Premium Tools Routes (Outside Layout - Full Page) */}

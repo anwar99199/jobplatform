@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea";
-import { ArrowRight, Save } from "lucide-react";
+import { ArrowRight, Save, ListChecks } from "lucide-react";
 import { getJob, createJob, updateJob } from "../../utils/adminApi";
 
 export function AdminJobFormPage() {
@@ -19,6 +19,7 @@ export function AdminJobFormPage() {
     location: "",
     type: "",
     description: "",
+    requirements: "",
     applicationUrl: "",
     date: new Date().toISOString().split('T')[0]
   });
@@ -46,6 +47,7 @@ export function AdminJobFormPage() {
           location: response.job.location || "",
           type: response.job.type || "",
           description: response.job.description || "",
+          requirements: response.job.requirements || "",
           applicationUrl: response.job.applicationUrl || "",
           date: response.job.date || new Date().toISOString().split('T')[0]
         });
@@ -207,6 +209,25 @@ export function AdminJobFormPage() {
                 rows={10}
                 required
               />
+            </div>
+
+            {/* Requirements */}
+            <div className="space-y-2">
+              <Label htmlFor="requirements" className="flex items-center gap-2">
+                <ListChecks className="w-5 h-5 text-red-600" />
+                متطلبات الوظيفة (اختياري)
+              </Label>
+              <Textarea
+                id="requirements"
+                name="requirements"
+                value={formData.requirements}
+                onChange={handleChange}
+                placeholder="اكتب كل متطلب في سطر منفصل:&#10;• بكالوريوس في علوم الحاسوب&#10;• خبرة 3 سنوات في المجال&#10;• إتقان اللغة الإنجليزية&#10;• مهارات العمل الجماعي"
+                rows={6}
+              />
+              <p className="text-xs text-gray-500">
+                يمكنك كتابة كل متطلب في سطر منفصل، وسيتم عرضها كقائمة منقطة في صفحة الوظيفة
+              </p>
             </div>
 
             {/* Buttons */}

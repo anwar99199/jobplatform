@@ -7,15 +7,15 @@ import { toast } from "sonner@2.0.3";
 
 export function PaymentSuccessPage() {
   const [searchParams] = useSearchParams();
-  const sessionId = searchParams.get("session_id");
+  const transactionRef = searchParams.get("transaction_ref") || searchParams.get("ref");
   const [verifying, setVerifying] = useState(true);
   const [verified, setVerified] = useState(false);
   const [subscription, setSubscription] = useState<any>(null);
 
   useEffect(() => {
     const verifyPayment = async () => {
-      if (!sessionId) {
-        toast.error("معرف الجلسة مفقود");
+      if (!transactionRef) {
+        toast.error("معرف المعاملة مفقود");
         setVerifying(false);
         return;
       }
@@ -29,7 +29,7 @@ export function PaymentSuccessPage() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${publicAnonKey}`,
             },
-            body: JSON.stringify({ sessionId }),
+            body: JSON.stringify({ transactionRef }),
           }
         );
 
@@ -51,7 +51,7 @@ export function PaymentSuccessPage() {
     };
 
     verifyPayment();
-  }, [sessionId]);
+  }, [transactionRef]);
 
   if (verifying) {
     return (
