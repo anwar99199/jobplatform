@@ -1,34 +1,48 @@
-import { ArrowRight, TrendingUp, CheckCircle, Target, Lightbulb, BarChart3, Sparkles, Home, Lock, Crown } from "lucide-react";
-import { Button } from "../components/ui/button";
-import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { 
+  TrendingUp, 
+  ArrowRight, 
+  Sparkles, 
+  BarChart3, 
+  Target, 
+  CheckCircle2, 
+  Lightbulb,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp
+} from "lucide-react";
+import { Button } from "../components/ui/button";
 import { supabase } from "../utils/supabase/client";
+import { getJobs } from "../utils/api";
+import { calculateJobMatch, type UserProfile, type Job, type MatchResult } from "../utils/jobMatchCalculator";
+import { toast } from "sonner@2.0.3";
 
 export function JobMatchPage() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
   const [isPremium, setIsPremium] = useState(false);
-  const [checkingStatus, setCheckingStatus] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobMatches, setJobMatches] = useState<{ job: Job; match: MatchResult }[]>([]);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
-  // التحقق من حالة المستخدم
   useEffect(() => {
-    checkUserStatus();
+    checkAccess();
   }, []);
 
-  const checkUserStatus = async () => {
+  const checkAccess = async () => {
     try {
+      // Check if user is logged in
       const { data: { session } } = await supabase.auth.getSession();
       
-      if (!session?.user?.id) {
-        setIsLoggedIn(false);
-        setIsPremium(false);
-        setCheckingStatus(false);
+      if (!session) {
+        toast.error("يرجى تسجيل الدخول للوصول إلى هذه الميزة");
+        navigate("/login");
         return;
       }
 
-      setIsLoggedIn(true);
-
-      // التحقق من وجود اشتراك Premium نشط
+      // Check if user has premium subscription
       const { data: subscription } = await supabase
         .from('premium_subscriptions')
         .select('*')
@@ -36,296 +50,412 @@ export function JobMatchPage() {
         .eq('status', 'active')
         .single();
 
-      setIsPremium(!!subscription);
-      setCheckingStatus(false);
+      if (!subscription) {
+        toast.error("هذه الميزة متاحة للمشتركين Premium فقط");
+        navigate("/premium");
+        return;
+      }
+
+      setIsPremium(true);
+
+      // Load user profile
+      await loadUserProfile(session.user.id);
+
+      // Load jobs
+      await loadJobs();
+
     } catch (error) {
-      console.log('Error checking user status:', error);
-      setIsLoggedIn(false);
-      setIsPremium(false);
-      setCheckingStatus(false);
+      console.error("Error checking access:", error);
+      navigate("/");
     }
   };
 
-  const features = [
-    {
-      icon: <BarChart3 className="w-12 h-12 text-red-600" />,
-      title: "تحليل دقيق للتوافق",
-      description: "مقارنة شاملة بين ملفك ومتطلبات الوظيفة"
-    },
-    {
-      icon: <Target className="w-12 h-12 text-red-600" />,
-      title: "مقارنة المهارات المطلوبة",
-      description: "معرفة المهارات الموجودة والمفقودة"
-    },
-    {
-      icon: <Lightbulb className="w-12 h-12 text-red-600" />,
-      title: "توصيات للتحسين",
-      description: "اقتراحات لزيادة فرص القبول"
-    },
-    {
-      icon: <CheckCircle className="w-12 h-12 text-red-600" />,
-      title: "نسبة مئوية واضحة",
-      description: "عرض بسيط لمدى توافقك مع الوظيفة"
+  const loadUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (data) {
+        const profile: UserProfile = {
+          skills: data.skills || [],
+          experience: data.experience || '',
+          education: data.education || '',
+          location: data.location || '',
+          jobTitle: data.job_title || '',
+          bio: data.bio || '',
+          languages: data.languages || [],
+          certifications: data.certifications || []
+        };
+        setUserProfile(profile);
+      }
+    } catch (error) {
+      console.error("Error loading profile:", error);
     }
-  ];
+  };
 
-  // Loading state
-  if (checkingStatus) {
+  const loadJobs = async () => {
+    try {
+      const result = await getJobs();
+      if (result.success && result.jobs) {
+        setJobs(result.jobs);
+      }
+    } catch (error) {
+      console.error("Error loading jobs:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (userProfile && jobs.length > 0) {
+      calculateMatches();
+    }
+  }, [userProfile, jobs]);
+
+  const calculateMatches = () => {
+    if (!userProfile) return;
+
+    const matches = jobs.map(job => ({
+      job,
+      match: calculateJobMatch(userProfile, job)
+    }));
+
+    // Sort by match percentage (highest first)
+    matches.sort((a, b) => b.match.percentage - a.match.percentage);
+
+    setJobMatches(matches);
+  };
+
+  const getMatchColor = (percentage: number) => {
+    if (percentage >= 80) return "text-green-600";
+    if (percentage >= 60) return "text-yellow-600";
+    return "text-orange-600";
+  };
+
+  const getMatchBgColor = (percentage: number) => {
+    if (percentage >= 80) return "bg-green-50";
+    if (percentage >= 60) return "bg-yellow-50";
+    return "bg-orange-50";
+  };
+
+  const getMatchBorderColor = (percentage: number) => {
+    if (percentage >= 80) return "border-green-200";
+    if (percentage >= 60) return "border-yellow-200";
+    return "border-orange-200";
+  };
+
+  const getMatchLabel = (percentage: number) => {
+    if (percentage >= 80) return "توافق ممتاز";
+    if (percentage >= 60) return "توافق جيد";
+    if (percentage >= 40) return "توافق متوسط";
+    return "توافق ضعيف";
+  };
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 text-xl">جاري التحميل...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحليل التوافق...</p>
         </div>
       </div>
     );
   }
 
-  // غير مسجل دخول - يطلب منه تسجيل الدخول
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        {/* Header */}
-        <div className="bg-white shadow-sm border-b border-gray-200">
-          <div className="container mx-auto px-4 py-6">
-            <Link to="/premium" className="inline-flex items-center text-red-600 hover:text-red-700 mb-4">
-              <ArrowRight className="w-4 h-4 ml-2" />
-              العودة إلى خدمات Premium
-            </Link>
-          </div>
-        </div>
-
-        {/* Access Denied - Not Logged In */}
-        <div className="container mx-auto px-4 py-12">
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
-              <div className="inline-flex items-center justify-center w-24 h-24 bg-red-100 rounded-full mb-6">
-                <Lock className="w-12 h-12 text-red-600" />
-              </div>
-              
-              <h1 className="text-3xl mb-4 text-gray-800">يجب تسجيل الدخول أولاً</h1>
-              <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-                هذه الخدمة متاحة فقط للمستخدمين المسجلين. يرجى تسجيل الدخول للمتابعة.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/login">
-                  <Button className="bg-red-600 text-white hover:bg-red-700 px-8 py-6 text-lg">
-                    تسجيل الدخول
-                  </Button>
-                </Link>
-                <Link to="/signup">
-                  <Button className="bg-gray-200 text-gray-800 hover:bg-gray-300 px-8 py-6 text-lg">
-                    إنشاء حساب جديد
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // مسجل دخول لكن غير مشترك في Premium
   if (!isPremium) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        {/* Header */}
-        <div className="bg-white shadow-sm border-b border-gray-200">
-          <div className="container mx-auto px-4 py-6">
-            <Link to="/premium" className="inline-flex items-center text-red-600 hover:text-red-700 mb-4">
-              <ArrowRight className="w-4 h-4 ml-2" />
-              العودة إلى خدمات Premium
-            </Link>
-          </div>
-        </div>
-
-        {/* Access Denied - Not Premium */}
-        <div className="container mx-auto px-4 py-12">
-          <div className="max-w-3xl mx-auto">
-            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl shadow-xl p-12 text-center border-2 border-yellow-300">
-              <div className="inline-flex items-center justify-center w-24 h-24 bg-yellow-500 rounded-full mb-6">
-                <Crown className="w-12 h-12 text-white" />
-              </div>
-              
-              <h1 className="text-3xl mb-4 text-gray-800">هذه الخدمة حصرية للمشتركين في Premium</h1>
-              <p className="text-xl text-gray-700 mb-8 leading-relaxed">
-                ميزة <strong>نسبة التوافق مع الوظائف</strong> متاحة فقط للمشتركين في باقة Premium.
-              </p>
-
-              <div className="bg-white rounded-xl p-6 mb-8 text-right">
-                <h3 className="text-xl mb-4 text-gray-800">ماذا ستحصل عند الاشتراك؟</h3>
-                <ul className="space-y-3">
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">نسبة توافق تلقائية على جميع بطاقات الوظائف</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">تحليل دقيق لمهاراتك وخبراتك</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">توصيات ذكية لتحسين فرص القبول</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">توليد Cover Letter و CV بالذكاء الاصطناعي</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-700">بطاقة رقمية احترافية</span>
-                  </li>
-                </ul>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/premium">
-                  <Button className="bg-red-600 text-white hover:bg-red-700 px-10 py-6 text-xl flex items-center gap-2">
-                    <Crown className="w-6 h-6" />
-                    اشترك الآن في Premium
-                  </Button>
-                </Link>
-                <Link to="/">
-                  <Button className="bg-gray-200 text-gray-800 hover:bg-gray-300 px-8 py-6 text-lg">
-                    العودة للصفحة الرئيسية
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return null;
   }
 
-  // مستخدم Premium - عرض الصفحة الكاملة
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="container mx-auto px-4 py-6">
-          <Link to="/premium" className="inline-flex items-center text-red-600 hover:text-red-700 mb-4">
-            <ArrowRight className="w-4 h-4 ml-2" />
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-br from-red-600 to-red-700 text-white py-12 px-4">
+        <div className="max-w-6xl mx-auto">
+          <Button
+            variant="ghost"
+            className="text-white hover:bg-white/10 mb-6"
+            onClick={() => navigate("/premium")}
+          >
+            <ArrowRight className="ml-2 h-4 w-4" />
             العودة إلى خدمات Premium
-          </Link>
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-8 h-8 text-white" />
+          </Button>
+
+          <div className="text-center mb-8">
+            <div className="inline-block p-4 bg-white/10 rounded-full mb-4">
+              <TrendingUp className="w-12 h-12" />
             </div>
-            <div>
-              <h1 className="text-3xl text-gray-800">نسبة التوافق مع الوظائف</h1>
-              <p className="text-gray-600">اعرف مدى تواف�� مهاراتك مع متطلبات كل وظيفة قبل التقديم</p>
-            </div>
+            <h1 className="text-4xl mb-4">نسبة التوافق مع الوظائف</h1>
+            <p className="text-xl text-red-100 max-w-2xl mx-auto">
+              اعرف مدى توافقك مع كل وظيفة قبل التقديم بتحليل ذكي دقيق
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-12">
-        {/* How it Works Section */}
-        <div className="max-w-4xl mx-auto mb-16">
-          <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12 text-center">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full mb-6">
-              <Sparkles className="w-10 h-10 text-white" />
+      {/* How it Works Section */}
+      <div className="max-w-6xl mx-auto px-4 py-12">
+        <div className="bg-white rounded-xl shadow-sm p-8 mb-8 border border-gray-200">
+          <div className="text-center mb-8">
+            <div className="inline-block p-3 bg-blue-50 rounded-full mb-3">
+              <Sparkles className="w-8 h-8 text-blue-600" />
             </div>
-            <h2 className="text-3xl mb-4 text-gray-800">كيف يعمل؟</h2>
-            <p className="text-xl text-gray-600 leading-relaxed">
-              نقوم بتحليل مهاراتك وخبراتك ومقارنتها بمتطلبات الوظيفة لنعطيك نسبة التوافق المئوية.
+            <h2 className="text-2xl text-gray-800 mb-2">كيف يعمل؟</h2>
+            <p className="text-gray-600">
+              نقوم بتحليل مهاراتك وخبراتك ومقارنتها بمتطلبات الوظيفة لتعطيك نسبة التوافق المئوية.
             </p>
           </div>
-        </div>
 
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-2 gap-8 mb-16 max-w-5xl mx-auto">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-xl shadow-lg p-8 text-center hover:shadow-xl transition-all"
-            >
-              <div className="flex justify-center mb-6">
-                {feature.icon}
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-red-50 rounded-lg flex-shrink-0">
+                  <BarChart3 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg text-gray-800 mb-2">تحليل دقيق للتوافق</h3>
+                  <p className="text-gray-600 text-sm">
+                    مقارنة شاملة بين ملفك ومتطلبات الوظيفة
+                  </p>
+                </div>
               </div>
-              <h3 className="text-xl mb-3 text-gray-800">{feature.title}</h3>
-              <p className="text-gray-600 leading-relaxed">{feature.description}</p>
             </div>
-          ))}
+
+            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-red-50 rounded-lg flex-shrink-0">
+                  <Target className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg text-gray-800 mb-2">مقارنة المهارات المطلوبة</h3>
+                  <p className="text-gray-600 text-sm">
+                    معرفة المهارات الموجودة والمفقودة
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-red-50 rounded-lg flex-shrink-0">
+                  <CheckCircle2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg text-gray-800 mb-2">نسبة مئوية واضحة</h3>
+                  <p className="text-gray-600 text-sm">
+                    عرض بسيط لمدى توافقك مع الوظيفة
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-red-50 rounded-lg flex-shrink-0">
+                  <Lightbulb className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg text-gray-800 mb-2">توصيات للتحسين</h3>
+                  <p className="text-gray-600 text-sm">
+                    اقتراحات لزيادة فرص القبول
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <p className="text-green-800 text-sm">
+              <strong>استخدم الأداة الآن</strong> - قم بالتمرير للأسفل لرؤية نسبة توافقك مع جميع الوظائف المتاحة
+            </p>
+          </div>
         </div>
 
-        {/* CTA Section */}
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-2xl shadow-xl p-8 md:p-12 text-center text-white">
-            <h2 className="text-3xl mb-4">هذه الخدمة متاحة مباشرة على بطاقات الوظائف</h2>
-            <p className="text-xl mb-2 text-red-100">
-              شاهد نسبة التوافق تلقائياً على كل بطاقة وظيفة
-            </p>
-            <p className="text-lg mb-8 text-red-100">
-              نقوم بتحليل مهاراتك وخبراتك ومقارنتها بمتطلبات الوظيفة لنعطيك نسبة التوافق المئوية
-            </p>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-8 text-right">
-              <h3 className="text-xl mb-4 flex items-center gap-2">
-                <CheckCircle className="w-6 h-6" />
-                متطلبات الاستخدام:
-              </h3>
-              <ul className="space-y-3 text-red-50">
-                <li className="flex items-start gap-3">
-                  <span className="text-2xl">✅</span>
-                  <span className="text-lg">تسجيل الدخول بحساب Premium نشط</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-2xl">✅</span>
-                  <span className="text-lg">إكمال الملف الشخصي (المهارات، الخبرة، التخصص)</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-2xl">✅</span>
-                  <span className="text-lg">الانتقال إلى الصفحة الرئيسية لرؤية النسب</span>
-                </li>
-              </ul>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/">
-                <Button className="bg-white text-red-600 hover:bg-gray-100 px-8 py-6 text-lg">
-                  <Home className="ml-2 w-5 h-5" />
-                  الانتقال إلى الصفحة الرئيسية
-                </Button>
-              </Link>
-              <Link to="/profile">
-                <Button className="bg-yellow-500 text-white hover:bg-yellow-600 px-8 py-6 text-lg">
-                  <Target className="ml-2 w-5 h-5" />
-                  إكمال الملف الشخصي
-                </Button>
-              </Link>
+        {/* Profile Status */}
+        {!userProfile?.skills || userProfile.skills.length === 0 ? (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-8 flex items-start gap-4">
+            <AlertCircle className="w-6 h-6 text-yellow-600 flex-shrink-0" />
+            <div>
+              <h3 className="text-lg text-yellow-900 mb-2">أكمل بروفايلك للحصول على نتائج دقيقة</h3>
+              <p className="text-yellow-800 mb-4">
+                لتحسين دقة حساب نسبة التوافق، يرجى إكمال معلومات بروفايلك وإضافة مهاراتك وخبراتك.
+              </p>
+              <Button
+                onClick={() => navigate("/profile")}
+                className="bg-yellow-600 hover:bg-yellow-700"
+              >
+                إكمال البروفايل
+              </Button>
             </div>
           </div>
-        </div>
+        ) : null}
 
-        {/* Info Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mt-12 max-w-5xl mx-auto">
-          <div className="bg-blue-50 rounded-xl p-6 border-2 border-blue-200">
-            <div className="text-4xl mb-3 text-center">📊</div>
-            <h3 className="text-lg mb-2 text-gray-800 text-center">تحليل فوري</h3>
-            <p className="text-sm text-gray-600 text-center">
-              احصل على نتائج التحليل مباشرة على كل وظيفة
-            </p>
-          </div>
-          
-          <div className="bg-green-50 rounded-xl p-6 border-2 border-green-200">
-            <div className="text-4xl mb-3 text-center">✅</div>
-            <h3 className="text-lg mb-2 text-gray-800 text-center">نتائج دقيقة</h3>
-            <p className="text-sm text-gray-600 text-center">
-              مقارنة شاملة بين مهاراتك ومتطلبات العمل
-            </p>
-          </div>
-          
-          <div className="bg-yellow-50 rounded-xl p-6 border-2 border-yellow-200">
-            <div className="text-4xl mb-3 text-center">💡</div>
-            <h3 className="text-lg mb-2 text-gray-800 text-center">توصيات ذكية</h3>
-            <p className="text-sm text-gray-600 text-center">
-              اقتراحات عملية لتحسين فرصك في القبول
-            </p>
-          </div>
+        {/* Job Matches List */}
+        <div className="space-y-4">
+          <h2 className="text-2xl text-gray-800 mb-6">
+            الوظائف المتوافقة ({jobMatches.length})
+          </h2>
+
+          {jobMatches.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center border border-gray-200">
+              <TrendingUp className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-600 mb-2">لا توجد وظائف متاحة حالياً</p>
+              <p className="text-gray-500 text-sm">تحقق مرة أخرى لاحقاً</p>
+            </div>
+          ) : (
+            jobMatches.map(({ job, match }) => (
+              <div
+                key={job.id}
+                className={`bg-white rounded-lg shadow-sm border-2 ${getMatchBorderColor(match.percentage)} overflow-hidden transition-all hover:shadow-md`}
+              >
+                <div className="p-6">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-xl text-gray-800 mb-2">{job.title}</h3>
+                      {job.company && (
+                        <p className="text-gray-600 mb-1">{job.company}</p>
+                      )}
+                      {job.location && (
+                        <p className="text-gray-500 text-sm">{job.location}</p>
+                      )}
+                    </div>
+
+                    <div className={`${getMatchBgColor(match.percentage)} px-6 py-3 rounded-lg border-2 ${getMatchBorderColor(match.percentage)} text-center flex-shrink-0`}>
+                      <div className={`text-3xl ${getMatchColor(match.percentage)}`}>
+                        {match.percentage}%
+                      </div>
+                      <div className={`text-sm ${getMatchColor(match.percentage)} mt-1`}>
+                        {getMatchLabel(match.percentage)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Breakdown */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+                      <div className="text-lg text-gray-800">{match.breakdown.skills}%</div>
+                      <div className="text-xs text-gray-600 mt-1">المهارات</div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+                      <div className="text-lg text-gray-800">{match.breakdown.experience}%</div>
+                      <div className="text-xs text-gray-600 mt-1">الخبرة</div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+                      <div className="text-lg text-gray-800">{match.breakdown.location}%</div>
+                      <div className="text-xs text-gray-600 mt-1">الموقع</div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+                      <div className="text-lg text-gray-800">{match.breakdown.education}%</div>
+                      <div className="text-xs text-gray-600 mt-1">التعليم</div>
+                    </div>
+                  </div>
+
+                  {/* Expandable Details */}
+                  <button
+                    onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
+                    className="w-full flex items-center justify-between text-red-600 hover:text-red-700 transition-colors py-2 border-t border-gray-200"
+                  >
+                    <span className="text-sm">
+                      {expandedJobId === job.id ? 'إخفاء التفاصيل' : 'عرض التفاصيل والتوصيات'}
+                    </span>
+                    {expandedJobId === job.id ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </button>
+
+                  {/* Expanded Content */}
+                  {expandedJobId === job.id && (
+                    <div className="mt-4 space-y-4 pt-4 border-t border-gray-200">
+                      {/* Matched Skills */}
+                      {match.matchedSkills.length > 0 && (
+                        <div>
+                          <h4 className="text-sm text-gray-700 mb-2 flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-green-600" />
+                            المهارات المتوافقة
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {match.matchedSkills.map((skill, idx) => (
+                              <span
+                                key={idx}
+                                className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm border border-green-200"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Missing Skills */}
+                      {match.missingSkills.length > 0 && (
+                        <div>
+                          <h4 className="text-sm text-gray-700 mb-2 flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-orange-600" />
+                            المهارات المطلوبة المفقودة
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {match.missingSkills.map((skill, idx) => (
+                              <span
+                                key={idx}
+                                className="px-3 py-1 bg-orange-50 text-orange-700 rounded-full text-sm border border-orange-200"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Recommendations */}
+                      {match.recommendations.length > 0 && (
+                        <div>
+                          <h4 className="text-sm text-gray-700 mb-2 flex items-center gap-2">
+                            <Lightbulb className="w-4 h-4 text-blue-600" />
+                            توصيات للتحسين
+                          </h4>
+                          <ul className="space-y-2">
+                            {match.recommendations.map((rec, idx) => (
+                              <li
+                                key={idx}
+                                className="text-sm text-gray-600 flex items-start gap-2 bg-blue-50 p-3 rounded-lg border border-blue-200"
+                              >
+                                <span className="text-blue-600 flex-shrink-0">•</span>
+                                <span>{rec}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-3 pt-2">
+                        <Button
+                          onClick={() => navigate(`/job/${job.id}`)}
+                          className="flex-1 bg-red-600 hover:bg-red-700"
+                        >
+                          عرض تفاصيل الوظيفة
+                        </Button>
+                        {job.applicationUrl && (
+                          <Button
+                            onClick={() => window.open(job.applicationUrl, '_blank')}
+                            variant="outline"
+                            className="flex-1"
+                          >
+                            التقديم الآن
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

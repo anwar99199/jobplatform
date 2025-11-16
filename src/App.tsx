@@ -17,6 +17,7 @@ import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { DigitalCardPage } from "./pages/DigitalCardPage";
 import { PublicCardPage } from "./pages/PublicCardPage";
 import { JobMatchPage } from "./pages/JobMatchPage";
+import { ContactPage } from "./pages/ContactPage";
 import { Layout } from "./components/Layout";
 import { PaymentSuccessPage } from "./pages/PaymentSuccessPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
@@ -26,6 +27,7 @@ import { AdminJobFormPage } from "./pages/admin/AdminJobFormPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminAnalyticsPage } from "./pages/admin/AdminAnalyticsPage";
 import { AdminNewsPage } from "./pages/admin/AdminNewsPage";
+import { AdminContactPage } from "./pages/admin/AdminContactPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export default function App() {
@@ -37,6 +39,7 @@ export default function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="about" element={<AboutPage />} />
+            <Route path="contact" element={<ContactPage />} />
             <Route path="premium" element={
               <ProtectedRoute>
                 <PremiumPage />
@@ -99,6 +102,7 @@ export default function App() {
           <Route path="/admin/jobs" element={<AdminJobsPage />} />
           <Route path="/admin/jobs/:id" element={<AdminJobFormPage />} />
           <Route path="/admin/news" element={<AdminNewsPage />} />
+          <Route path="/admin/contact" element={<AdminContactPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
           

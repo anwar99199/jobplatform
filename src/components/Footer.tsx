@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 export function Footer() {
   const footerLinks = [
     { title: "من نحن", href: "/about" },
-    { title: "تواصل معنا", href: "#" },
+    { title: "تواصل معنا", href: "/contact" },
     { title: "أهم الأخبار", href: "/news" },
     { title: "المسار الوظيفي", href: "/career-path" }
   ];

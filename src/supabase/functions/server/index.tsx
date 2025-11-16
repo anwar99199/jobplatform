@@ -2252,4 +2252,189 @@ app.delete("/make-server-8a20c00b/admin/news/:id", async (c) => {
   }
 });
 
+// ============================================
+// CONTACT FORM ROUTES
+// ============================================
+
+// Submit contact message (public - no auth required)
+app.post("/make-server-8a20c00b/contact", async (c) => {
+  try {
+    const { name, email, phone, requestType, message } = await c.req.json();
+
+    // Validate required fields
+    if (!name || !email || !requestType || !message) {
+      return c.json({ 
+        success: false, 
+        error: "جميع الحقول المطلوبة يجب أن تكون مملوءة" 
+      }, 400);
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return c.json({ 
+        success: false, 
+        error: "البريد الإلكتروني غير صحيح" 
+      }, 400);
+    }
+
+    // Validate request type
+    const validTypes = ['general', 'technical', 'refund', 'ai-service'];
+    if (!validTypes.includes(requestType)) {
+      return c.json({ 
+        success: false, 
+        error: "نوع الطلب غير صحيح" 
+      }, 400);
+    }
+
+    // Validate message length
+    if (message.trim().length < 10) {
+      return c.json({ 
+        success: false, 
+        error: "الرسالة يجب أن تكون 10 أحرف على الأقل" 
+      }, 400);
+    }
+
+    // Insert into database
+    const { data, error } = await supabase
+      .from('contact_messages')
+      .insert([
+        {
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone ? phone.trim() : null,
+          request_type: requestType,
+          message: message.trim(),
+          status: 'new',
+          created_at: new Date().toISOString()
+        }
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error inserting contact message:", error);
+      return c.json({ 
+        success: false, 
+        error: "حدث خطأ أثناء إرسال الرسالة. يرجى المحاولة مرة أخرى." 
+      }, 500);
+    }
+
+    console.log("Contact message saved successfully:", data?.id);
+
+    return c.json({ 
+      success: true, 
+      message: "تم إرسال رسالتك بنجاح!",
+      id: data?.id
+    });
+
+  } catch (error) {
+    console.error("Error in contact form submission:", error);
+    return c.json({ 
+      success: false, 
+      error: "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى." 
+    }, 500);
+  }
+});
+
+// Get all contact messages (Admin only)
+app.get("/make-server-8a20c00b/admin/contact-messages", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    if (!accessToken) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    // Verify user is admin
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    // Check if user is admin
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (userError || !userData || userData.role !== 'admin') {
+      return c.json({ success: false, error: "Unauthorized - Admin access required" }, 403);
+    }
+
+    // Get all messages
+    const { data: messages, error } = await supabase
+      .from('contact_messages')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error fetching messages:", error);
+      return c.json({ success: false, error: error.message }, 500);
+    }
+
+    return c.json({ success: true, messages: messages || [] });
+
+  } catch (error) {
+    console.error("Error in get contact messages:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Update contact message status (Admin only)
+app.put("/make-server-8a20c00b/admin/contact-messages/:id", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    const messageId = c.req.param('id');
+    const { status } = await c.req.json();
+
+    if (!accessToken) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    // Verify user is admin
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    
+    if (!user || authError) {
+      return c.json({ success: false, error: "Unauthorized" }, 401);
+    }
+
+    // Check if user is admin
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (userError || !userData || userData.role !== 'admin') {
+      return c.json({ success: false, error: "Unauthorized - Admin access required" }, 403);
+    }
+
+    // Validate status
+    const validStatuses = ['new', 'in-progress', 'resolved', 'closed'];
+    if (!validStatuses.includes(status)) {
+      return c.json({ success: false, error: "Invalid status" }, 400);
+    }
+
+    // Update message status
+    const { error } = await supabase
+      .from('contact_messages')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', messageId);
+
+    if (error) {
+      console.error("Error updating message status:", error);
+      return c.json({ success: false, error: error.message }, 500);
+    }
+
+    return c.json({ success: true, message: "تم تحديث حالة الرسالة بنجاح" });
+
+  } catch (error) {
+    console.error("Error in update contact message:", error);
+    return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
 Deno.serve(app.fetch);
