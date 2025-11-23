@@ -1,4 +1,4 @@
-import { Crown, CheckCircle, Star, Zap, FileText, Target, Sparkles, CreditCard, TrendingUp } from "lucide-react";
+import { Crown, CheckCircle, Star, Zap, FileText, Sparkles, CreditCard, TrendingUp } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -109,17 +109,6 @@ export function PremiumPage() {
       link: "/premium/cover-letter"
     },
     {
-      icon: <Target className="w-16 h-16 text-red-600" />,
-      title: "سيرة ذاتية متوافقة مع ATS",
-      description: "سيرة ذاتية محسّنة لأنظمة تتبع المتقدمين في الشركات الكبرى",
-      features: [
-        "تنسيق متوافق مع ATS",
-        "كلمات مفتاحية محسّنة",
-        "تحليل نسبة القبول"
-      ],
-      link: "/premium/cv-builder"
-    },
-    {
       icon: <CreditCard className="w-16 h-16 text-red-600" />,
       title: "بطاقة رقمية احترافية",
       description: "بطاقة تعريف رقمية شخصية يمكن مشاركتها مع أصحاب العمل",
@@ -141,6 +130,18 @@ export function PremiumPage() {
         "نسبة مئوية واضحة للتوافق"
       ],
       link: "/premium/job-match"
+    },
+    {
+      icon: <Sparkles className="w-16 h-16 text-red-600" />,
+      title: "محول ATS للسيرة الذاتية",
+      description: "حوّل سيرتك الذاتية إلى نسخة متوافقة مع أنظمة ATS باستخدام الذكاء الاصطناعي",
+      features: [
+        "تحويل تلقائي بالذكاء الاصطناعي",
+        "تنسيق متوافق 100% مع ATS",
+        "تحميل بصيغة PDF أو Word",
+        "تحسين الكلمات المفتاحية"
+      ],
+      link: "/premium/ats-converter"
     }
   ];
 
@@ -154,7 +155,7 @@ export function PremiumPage() {
       features: [
         "للفترة كاملة",
         "توليد Cover Letter بالذكاء الاصطناعي",
-        "توليد CV بنظام ATS بالذكاء الاصطناعي",
+        "محول ATS للسيرة الذاتية",
         "بطاقة رقمية احترافية",
         "تحليل دقيق ومقارنة المهارات",
         "إشعارات فورية للوظائف الجديدة"
@@ -170,7 +171,7 @@ export function PremiumPage() {
       features: [
         "للفترة كاملة",
         "توليد Cover Letter بالذكاء الاصطناعي",
-        "توليد CV بنظام ATS بالذكاء الاصطناعي",
+        "محول ATS للسيرة الذاتية",
         "بطاقة رقمية احترافية",
         "تحليل دقيق ومقارنة المهارات",
         "إشعارات فورية للوظائف الجديدة"
@@ -385,7 +386,7 @@ export function PremiumPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-xl mb-3 text-red-600">كيف يمكنني الاشتراك في الخدمة؟</h3>
             <p className="text-gray-700">
-              يمكنك اختيار الباقة المناسبة والضغط على "اختر هذه الباقة"، ثم إكمال عملية الدفع الآمن��.
+              يمكنك اختيار الباقة المناسبة والضغط على "اختر هذه الباقة"، ثم إكمال عملية الدفع الآمن.
             </p>
           </div>
 

@@ -3,6 +3,7 @@ import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as kv from "./kv_store.tsx";
+import { extractPDFText, extractDOCXText } from "./pdf-extractor.tsx";
 
 const app = new Hono();
 
@@ -2466,6 +2467,725 @@ app.put("/make-server-8a20c00b/admin/contact-messages/:id", async (c) => {
   } catch (error) {
     console.error("Error in update contact message:", error);
     return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// ==================== AI Cover Letter Endpoints ====================
+
+// Generate cover letter with AI
+app.post("/make-server-8a20c00b/ai/generate-cover-letter", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { userId, userProfile, jobTitle, jobDescription, companyName, language = 'ar', additionalInfo } = body;
+    
+    if (!userId || !userProfile || !jobTitle || !companyName) {
+      return c.json({ error: 'User ID, profile, job title, and company name are required' }, 400);
+    }
+    
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      console.error('OpenAI API key not configured');
+      return c.json({ error: 'AI service not configured. Please contact administrator.' }, 500);
+    }
+    
+    const isArabic = language === 'ar';
+    
+    const systemMessage = isArabic
+      ? `أنت خبير محترف في كتابة رسائل التقديم للوظائف (Cover Letters) بأعلى معايير الجودة الاحترافية. 
+تكتب رسائل تعريف قوية ومقنعة تبرز مهارات المتقدم وخبراته بطريقة تجذب انتباه مدراء التوظيف.
+تركز على الإنجازات العملية والمهارات التقنية والتحليلية والالتزام بالتميز والسلامة المهنية.
+اكتب بلغة عربية فصحى احترافية وسلسة ومباشرة.`
+      : `You are a professional expert in writing job application cover letters at the highest standards of quality.
+You write strong and persuasive cover letters that highlight the applicant's skills and experience in a way that captures the attention of hiring managers.
+You focus on practical achievements, technical and analytical skills, commitment to excellence and professional safety.
+Write in professional, fluent, and direct English.`;
+    
+    const prompt = isArabic ?
+      `اكتب رسالة تقديم احترافية ونظيفة من صفحة واحدة بالتنسيق والنبرة التالية:
+
+الموضوع: طلب التقديم على وظيفة ${jobTitle}
+
+السيد/ة مدير التوظيف المحترم/ة،
+
+اكتب رسالة تعريف قوية ورسمية لوظيفة ${jobTitle} في شركة ${companyName}.
+
+معلومات المتقدم:
+- الاسم: ${userProfile.name}
+- التخصص: ${userProfile.specialization || userProfile.specialty || 'غير محدد'}
+- الخبرة العملية: ${userProfile.experience || 'خريج جديد'}
+- التعليم: ${userProfile.education || 'درجة البكالوريوس'}
+${userProfile.skills && userProfile.skills.length > 0 ? `- المهارات: ${userProfile.skills.join('، ')}` : ''}
+${userProfile.bio ? `- نبذة: ${userProfile.bio}` : ''}
+
+${jobDescription ? `وصف الوظيفة ومتطلباتها:\n${jobDescription}` : ''}
+
+${additionalInfo ? `معلومات إضافية من المتقدم:\n${additionalInfo}` : ''}
+
+يجب التأكيد على:
+- الفهم العملي لطبيعة العمل وعمليات التشغيل
+- المهارات التقنية والتحليلية في مجال ${userProfile.specialization || userProfile.specialty || 'التخصص'}
+- الالتزام بالسلامة والتميز التشغيلي والعمل الجماعي
+- إتقان اللغتين العربية والإنجليزية في التواصل
+- الحماس للمساهمة في جودة الخدمة والتحسين المستمر
+
+استخدم تنسيقاً احترافياً واضحاً:
+- فقرة افتتاحية قوية تجذب الانتباه
+- 2-3 فقرات أساسية تربط المهارات بالمتطلبات
+- فقرة ختامية تعبر عن الحماس والاهتمام
+- خاتمة رسمية مهذبة
+
+اكتب بلغة عربية فصحى احترافية وسلسة.`
+      : `Write a professional and clean one-page cover letter with the following format and tone:
+
+Subject: Application for ${jobTitle} Position
+
+Dear Hiring Manager,
+
+Write a strong and formal cover letter for ${jobTitle} position at ${companyName}.
+
+Applicant Information:
+- Name: ${userProfile.name}
+- Specialization: ${userProfile.specialization || userProfile.specialty || 'Not specified'}
+- Work Experience: ${userProfile.experience || 'Recent Graduate'}
+- Education: ${userProfile.education || 'Bachelor\'s Degree'}
+${userProfile.skills && userProfile.skills.length > 0 ? `- Skills: ${userProfile.skills.join(', ')}` : ''}
+${userProfile.bio ? `- Bio: ${userProfile.bio}` : ''}
+
+${jobDescription ? `Job Description and Requirements:\n${jobDescription}` : ''}
+
+${additionalInfo ? `Additional Information from Applicant:\n${additionalInfo}` : ''}
+
+Emphasize:
+- Practical understanding of the work nature and operational processes
+- Technical and analytical skills in ${userProfile.specialization || userProfile.specialty || 'the field'}
+- Commitment to safety, operational excellence, and teamwork
+- Proficiency in both Arabic and English communication
+- Enthusiasm to contribute to service quality and continuous improvement
+
+Use a clear professional format:
+- Strong opening paragraph that captures attention
+- 2-3 main paragraphs connecting skills to requirements
+- Closing paragraph expressing enthusiasm and interest
+- Professional polite conclusion
+
+Write in professional and fluent English.`;
+    
+    console.log('Calling OpenAI API for cover letter generation...');
+    
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemMessage },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 1500
+      })
+    });
+    
+    if (!openaiResponse.ok) {
+      const errorData = await openaiResponse.json();
+      console.error('OpenAI API error:', errorData);
+      return c.json({ 
+        error: 'Failed to generate cover letter: ' + (errorData.error?.message || 'Unknown error') 
+      }, 500);
+    }
+    
+    const openaiData = await openaiResponse.json();
+    const generatedLetter = openaiData.choices[0]?.message?.content;
+    
+    if (!generatedLetter) {
+      return c.json({ error: 'No cover letter generated' }, 500);
+    }
+    
+    // Save to KV store
+    const timestamp = Date.now();
+    const letterRecord = {
+      id: `letter_${timestamp}`,
+      userId,
+      content: generatedLetter,
+      generatedAt: new Date().toISOString(),
+      jobTitle,
+      companyName,
+      language: language || 'ar',
+    };
+    
+    const generatedLetters = await kv.get(`user:${userId}:cover-letters`) || [];
+    generatedLetters.unshift(letterRecord);
+    
+    // Keep only last 10 letters
+    if (generatedLetters.length > 10) {
+      generatedLetters.pop();
+    }
+    
+    await kv.set(`user:${userId}:cover-letters`, generatedLetters);
+    
+    console.log('Cover letter generated successfully for user:', userId);
+    
+    return c.json({
+      success: true,
+      coverLetter: generatedLetter,
+      record: letterRecord
+    });
+  } catch (error) {
+    console.error('Error generating cover letter:', error);
+    return c.json({ error: 'Failed to generate cover letter: ' + String(error) }, 500);
+  }
+});
+
+// Download cover letter as PDF (HTML) or DOCX
+app.post("/make-server-8a20c00b/ai/download-cover-letter", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { content, jobTitle, company, userName, format = 'pdf', language = 'ar' } = body;
+    
+    if (!content || !jobTitle || !company || !userName) {
+      return c.json({ error: 'Missing required fields' }, 400);
+    }
+    
+    const isArabic = language === 'ar';
+    
+    if (format === 'pdf') {
+      // Return HTML file for printing to PDF
+      const htmlContent = `<!DOCTYPE html>
+<html dir="${isArabic ? 'rtl' : 'ltr'}" lang="${isArabic ? 'ar' : 'en'}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cover Letter - ${jobTitle} - ${company}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 2cm;
+    }
+    @media print {
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    }
+    body {
+      font-family: ${isArabic ? "'Arial', 'Tahoma', 'Segoe UI', sans-serif" : "'Times New Roman', 'Georgia', serif"};
+      line-height: 1.8;
+      color: #333;
+      direction: ${isArabic ? 'rtl' : 'ltr'};
+      max-width: 21cm;
+      margin: 0 auto;
+      padding: 20px;
+      background: white;
+    }
+    .header {
+      text-align: ${isArabic ? 'right' : 'left'};
+      margin-bottom: 40px;
+    }
+    .name {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #1a1a1a;
+    }
+    .date {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 30px;
+    }
+    .content {
+      white-space: pre-wrap;
+      text-align: justify;
+      font-size: 12pt;
+      line-height: 1.8;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: ${isArabic ? 'right' : 'left'};
+    }
+    .signature {
+      margin-top: 20px;
+      font-weight: 500;
+    }
+    @media print {
+      .no-print {
+        display: none;
+      }
+    }
+    .print-button {
+      position: fixed;
+      top: 20px;
+      ${isArabic ? 'left' : 'right'}: 20px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .print-button:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+  <button class="print-button no-print" onclick="window.print()">
+    ${isArabic ? '🖨️ طباعة / حفظ كـ PDF' : '🖨️ Print / Save as PDF'}
+  </button>
+  
+  <div class="header">
+    <div class="name">${userName}</div>
+    <div class="date">${new Date().toLocaleDateString(isArabic ? 'ar-SA' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+  </div>
+  
+  <div class="content">${content.replace(/\n/g, '<br>')}</div>
+  
+  <div class="footer">
+    <p class="signature">
+      ${isArabic ? 'مع أطيب التحيات،' : 'Sincerely,'}<br>
+      <strong>${userName}</strong>
+    </p>
+  </div>
+</body>
+</html>`;
+      
+      return new Response(htmlContent, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Disposition': `attachment; filename="Cover_Letter_${company}_${jobTitle}.html"`,
+        },
+      });
+    } else if (format === 'docx') {
+      // Return simple text file with .docx extension
+      const textContent = `${userName}\n${new Date().toLocaleDateString(isArabic ? 'ar-SA' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}\n\n${content}\n\n${isArabic ? 'مع أطيب التحيات،' : 'Sincerely,'}\n${userName}`;
+      
+      return new Response(textContent, {
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'Content-Disposition': `attachment; filename="Cover_Letter_${company}_${jobTitle}.docx"`,
+        },
+      });
+    } else {
+      return c.json({ error: 'Invalid format. Use pdf or docx' }, 400);
+    }
+  } catch (error) {
+    console.error('Error downloading cover letter:', error);
+    return c.json({ error: 'Failed to download cover letter: ' + String(error) }, 500);
+  }
+});
+
+// Get saved cover letters for a user
+app.get("/make-server-8a20c00b/ai/get-cover-letters/:userId", async (c) => {
+  try {
+    const userId = c.req.param('userId');
+    
+    if (!userId) {
+      return c.json({ error: 'User ID is required' }, 400);
+    }
+    
+    const letters = await kv.get(`user:${userId}:cover-letters`) || [];
+    
+    return c.json({
+      success: true,
+      letters: letters
+    });
+  } catch (error) {
+    console.error('Error fetching cover letters:', error);
+    return c.json({ error: 'Failed to fetch cover letters: ' + String(error) }, 500);
+  }
+});
+
+// ====================================
+// ATS CV Converter Endpoints
+// ====================================
+
+/**
+ * استخراج النص من ملف PDF أو DOCX
+ */
+app.post("/make-server-8a20c00b/ats/extract-text", async (c) => {
+  try {
+    console.log('📤 Extract text endpoint called');
+    
+    const formData = await c.req.formData();
+    const file = formData.get('file') as File;
+
+    if (!file) {
+      console.error('❌ No file provided in form data');
+      return c.json({ success: false, error: 'لم يتم إرفاق ملف' }, 400);
+    }
+
+    console.log(`📄 File received: ${file.name} (${file.type}, ${file.size} bytes)`);
+
+    const fileName = file.name.toLowerCase();
+    const fileType = file.type;
+
+    // Read file as array buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = new Uint8Array(arrayBuffer);
+
+    console.log(`📊 Buffer size: ${buffer.length} bytes`);
+
+    let extractedText = '';
+
+    // Extract text based on file type
+    if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+      console.log('🔍 Processing PDF file...');
+      
+      try {
+        extractedText = await extractPDFText(buffer);
+        console.log(`✅ PDF parsed successfully. Text length: ${extractedText.length}`);
+      } catch (pdfError) {
+        console.error('❌ PDF parsing error:', pdfError);
+        
+        return c.json({ 
+          success: false, 
+          error: 'فشل استخراج النص من ملف PDF. يرجى التأكد من أن الملف غير محمي ومن نوع PDF صالح',
+          details: String(pdfError)
+        }, 400);
+      }
+    } else if (
+      fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      fileName.endsWith('.docx')
+    ) {
+      console.log('🔍 Processing DOCX file...');
+      
+      try {
+        extractedText = await extractDOCXText(buffer);
+        console.log(`✅ DOCX parsed successfully. Text length: ${extractedText.length}`);
+      } catch (docxError) {
+        console.error('❌ DOCX parsing error:', docxError);
+        
+        return c.json({ 
+          success: false, 
+          error: 'فشل استخراج النص من ملف Word. يرجى التأكد من أن الملف غير محمي ومن نوع DOCX صالح',
+          details: String(docxError)
+        }, 400);
+      }
+    } else {
+      console.error(`❌ Unsupported file type: ${fileType}`);
+      return c.json({ 
+        success: false, 
+        error: 'نوع الملف غير مدعوم. يرجى استخدام PDF أو DOCX فقط' 
+      }, 400);
+    }
+
+    if (!extractedText || extractedText.trim().length === 0) {
+      console.error('❌ No text found in file');
+      return c.json({ 
+        success: false, 
+        error: 'لم يتم العثور على نص في الملف. يرجى التأكد من أن الملف يحتوي على نصوص' 
+      }, 400);
+    }
+
+    console.log(`✅ Text extraction successful. Returning ${extractedText.trim().length} characters`);
+
+    return c.json({
+      success: true,
+      text: extractedText.trim()
+    });
+
+  } catch (error) {
+    console.error('❌ Unexpected error extracting text from file:', error);
+    console.error('Error stack:', error.stack);
+    
+    return c.json({ 
+      success: false, 
+      error: 'فشل استخراج النص من الملف',
+      details: String(error)
+    }, 500);
+  }
+});
+
+/**
+ * تحويل السيرة الذاتية إلى نسخة ATS باستخدام OpenAI
+ */
+app.post("/make-server-8a20c00b/ats/convert", async (c) => {
+  try {
+    // التحقق من المصادقة
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    if (!accessToken) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401);
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    if (authError || !user) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401);
+    }
+
+    // التحقق من اشتراك Premium
+    const { data: subscription } = await supabase
+      .from('premium_subscriptions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .single();
+
+    if (!subscription) {
+      return c.json({ 
+        success: false, 
+        error: 'يجب أن تكون مشترك Premium لاستخدام هذه الخدمة' 
+      }, 403);
+    }
+
+    const body = await c.req.json();
+    const { cvText, originalFileName } = body;
+
+    if (!cvText) {
+      return c.json({ success: false, error: 'CV text is required' }, 400);
+    }
+
+    // التحقق من وجود OpenAI API Key
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      console.error('❌ OPENAI_API_KEY is not configured');
+      return c.json({ 
+        success: false, 
+        error: 'خدمة الذكاء الاصطناعي غير متاحة حالياً' 
+      }, 500);
+    }
+
+    console.log('✅ OPENAI_API_KEY found');
+    console.log('📝 CV Text length:', cvText.length);
+    console.log('📝 CV Text preview:', cvText.substring(0, 200));
+
+    // استدعاء OpenAI API
+    const prompt = `حوّل السيرة الذاتية التالية إلى نسخة متوافقة مع نظام ATS:
+
+المتطلبات:
+- بدون أعمدة أو جرافيكس
+- تنسيق نصي بسيط وواضح
+- إعادة صياغة احترافية
+- تنظيم الخبرات باستخدام bullet points
+- تنظيم المهارات في قائمة مرتّبة
+- تحسين اللغة العربية أو الإنجليزية عند الحاجة
+- إضافة كلمات مفتاحية مناسبة
+- لا تحذف أي معلومة مهمة
+- أعد ترتيب الأقسام كالتالي: Summary → Skills → Experience → Education → Certifications
+
+السيرة الذاتية الأصلية:
+
+${cvText}
+
+يرجى إرجاع السيرة الذاتية المحولة فقط بدون أي نص إضافي أو تعليقات.`;
+
+    console.log('🌐 Calling OpenAI API...');
+    console.log('📊 Model: gpt-4o-mini');
+    console.log('📊 Prompt length:', prompt.length);
+
+    let openaiResponse;
+    try {
+      openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: 'أنت خبير في تحويل السير الذاتية إلى نسخ متوافقة مع نظام ATS. قم بالتحويل بشكل احترافي مع الحفاظ على جميع المعلومات المهمة.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 2000,
+        }),
+      });
+    } catch (fetchError) {
+      console.error('❌ Network error calling OpenAI:', fetchError);
+      console.error('Error message:', fetchError.message);
+      console.error('Error stack:', fetchError.stack);
+      return c.json({ 
+        success: false, 
+        error: 'فشل الاتصال بخدمة الذكاء الاصطناعي. يرجى المحاولة مرة أخرى.',
+        details: fetchError.message
+      }, 500);
+    }
+
+    console.log('📥 OpenAI Response status:', openaiResponse.status);
+    console.log('📥 OpenAI Response headers:', Object.fromEntries(openaiResponse.headers.entries()));
+
+    if (!openaiResponse.ok) {
+      const errorText = await openaiResponse.text();
+      console.error('❌ OpenAI API error response:', errorText);
+      
+      let errorMessage = 'فشل الاتصال بخدمة الذكاء الاصطناعي';
+      let errorDetails = '';
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        console.error('📊 OpenAI Error details:', JSON.stringify(errorData, null, 2));
+        
+        if (errorData.error?.type === 'insufficient_quota') {
+          errorMessage = 'نفدت حصة OpenAI API. يرجى التواصل مع المسؤول لإعادة شحن الحساب.';
+          errorDetails = 'Insufficient quota';
+        } else if (errorData.error?.type === 'invalid_request_error') {
+          errorMessage = 'خطأ في طلب API. يرجى المحاولة مرة أخرى.';
+          errorDetails = errorData.error?.message || '';
+        } else if (errorData.error?.code === 'invalid_api_key') {
+          errorMessage = 'مفتاح OpenAI API غير صالح. يرجى التواصل مع المسؤول.';
+          errorDetails = 'Invalid API key';
+        } else if (errorData.error?.message) {
+          errorDetails = errorData.error.message;
+          console.error('OpenAI Error message:', errorData.error.message);
+        }
+      } catch (e) {
+        console.error('❌ Failed to parse OpenAI error response:', e);
+        errorDetails = errorText.substring(0, 500);
+      }
+      
+      return c.json({ 
+        success: false, 
+        error: errorMessage,
+        details: errorDetails
+      }, 500);
+    }
+
+    let openaiData;
+    try {
+      openaiData = await openaiResponse.json();
+      console.log('📊 OpenAI response data:', JSON.stringify(openaiData, null, 2));
+    } catch (jsonError) {
+      console.error('❌ Failed to parse OpenAI JSON response:', jsonError);
+      return c.json({ 
+        success: false, 
+        error: 'فشل قراءة رد من OpenAI. يرجى المحاولة مرة أخرى.'
+      }, 500);
+    }
+
+    const convertedText = openaiData.choices?.[0]?.message?.content;
+
+    if (!convertedText) {
+      console.error('❌ No converted text received from OpenAI');
+      console.error('Full OpenAI response:', JSON.stringify(openaiData, null, 2));
+      return c.json({ 
+        success: false, 
+        error: 'لم يتم إنشاء نص محول من OpenAI. يرجى المحاولة مرة أخرى.'
+      }, 500);
+    }
+
+    console.log('✅ Conversion successful!');
+    console.log('📝 Converted text length:', convertedText.length);
+    console.log('📝 Converted text preview:', convertedText.substring(0, 200));
+
+    // حفظ السجل في قاعدة البيانات (اختياري)
+    try {
+      await supabase.from('ats_conversions').insert({
+        user_id: user.id,
+        original_file_name: originalFileName,
+        original_length: cvText.length,
+        converted_length: convertedText.length,
+        created_at: new Date().toISOString()
+      });
+      console.log('✅ Conversion record saved to database');
+    } catch (dbError) {
+      console.error('⚠️ Error saving conversion record:', dbError);
+      // لا نفشل الطلب إذا فشل الحفظ
+    }
+
+    return c.json({
+      success: true,
+      convertedText: convertedText.trim()
+    });
+
+  } catch (error) {
+    console.error('❌ Unexpected error in ATS convert endpoint:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    return c.json({ 
+      success: false, 
+      error: 'حدث خطأ غير متوقع أثناء تحويل السيرة الذاتية. يرجى المحاولة مرة أخرى.',
+      details: error.message
+    }, 500);
+  }
+});
+
+/**
+ * رفع ملف CV إلى Supabase Storage (اختياري)
+ */
+app.post("/make-server-8a20c00b/ats/upload", async (c) => {
+  try {
+    // التحقق من المصادقة
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    if (!accessToken) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401);
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    if (authError || !user) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401);
+    }
+
+    // TODO: Implement file upload to storage if needed
+    // هذا endpoint اختياري للمستقبل إذا أردت حفظ الملفات
+
+    return c.json({
+      success: true,
+      message: 'Upload endpoint - to be implemented'
+    });
+
+  } catch (error) {
+    console.error('Error in ATS upload endpoint:', error);
+    return c.json({ 
+      success: false, 
+      error: 'حدث خطأ أثناء رفع الملف: ' + String(error)
+    }, 500);
+  }
+});
+
+/**
+ * Test endpoint to check OpenAI API configuration
+ * للتحقق من إعدادات OpenAI
+ */
+app.get("/make-server-8a20c00b/test-openai", async (c) => {
+  try {
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    
+    if (!openaiApiKey) {
+      return c.json({
+        success: false,
+        error: 'OPENAI_API_KEY not found in environment variables',
+        hasKey: false
+      });
+    }
+
+    // Test with a simple API call
+    const testResponse = await fetch('https://api.openai.com/v1/models', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+      },
+    });
+
+    const responseText = await testResponse.text();
+    
+    return c.json({
+      success: testResponse.ok,
+      hasKey: true,
+      keyLength: openaiApiKey.length,
+      keyPrefix: openaiApiKey.substring(0, 7) + '...',
+      status: testResponse.status,
+      statusText: testResponse.statusText,
+      response: testResponse.ok ? 'API key is valid' : responseText.substring(0, 500)
+    });
+
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    }, 500);
   }
 });
 

@@ -1,33 +1,7 @@
-import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { 
-  User, 
-  Mail, 
-  MapPin, 
-  Briefcase, 
-  Calendar,
-  Edit,
-  Trash2,
-  LogOut,
-  Crown,
-  FileText,
-  Settings,
-  AlertCircle,
-  CheckCircle,
-  Phone,
-  Building,
-  Upload,
-  Sparkles,
-  X,
-  Download
-} from "lucide-react";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import { Textarea } from "../components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { supabase } from "../utils/supabase/client";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
+import { CoverLetterGenerator } from "../components/CoverLetterGenerator";
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -39,7 +13,8 @@ export function ProfilePage() {
   const [success, setSuccess] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
-  
+  const [jobs, setJobs] = useState<any[]>([]);
+
   const [profileData, setProfileData] = useState({
     name: "أنور الرواحي",
     email: "as8543245@gmail.com",
@@ -60,7 +35,24 @@ export function ProfilePage() {
 
   useEffect(() => {
     checkAuth();
+    loadJobs();
   }, []);
+
+  const loadJobs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("jobs")
+        .select("*")
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        setJobs(data);
+      }
+    } catch (err) {
+      console.error("Error loading jobs:", err);
+    }
+  };
 
   const checkAuth = async () => {
     try {
@@ -622,43 +614,60 @@ export function ProfilePage() {
                 {/* CV Tab */}
                 {activeTab === "cv" && (
                   <div className="space-y-6">
-                    {/* Cover Letter Section */}
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Sparkles className="w-5 h-5 text-blue-600" />
+                    {/* Cover Letter Section - Premium Feature */}
+                    {premiumData.isActive ? (
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+                        <div className="flex items-start gap-4 mb-4">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Sparkles className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-lg text-gray-800 mb-2">توليد رسالة تعريف (Cover Letter)</h3>
+                            <p className="text-sm text-gray-600">
+                              استخدم الذكاء الاصطناعي لإنشاء رسالة تعريف احترافية مخصصة لكل وظيفة
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <h3 className="text-lg text-gray-800 mb-2 flex items-center gap-2">
-                            <span>توليد رسالة تعريف (Cover Letter)</span>
-                            {!premiumData.isActive && (
+                        <CoverLetterGenerator 
+                          currentUser={{
+                            id: user?.id || '',
+                            name: profileData.name,
+                            email: profileData.email,
+                            specialty: profileData.specialty,
+                            experience: profileData.experience,
+                            skills: profileData.skills,
+                            bio: profileData.bio
+                          }}
+                          jobs={jobs}
+                        />
+                      </div>
+                    ) : (
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Sparkles className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-lg text-gray-800 mb-2 flex items-center gap-2">
+                              <span>توليد رسالة تعريف (Cover Letter)</span>
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs">
                                 <Crown className="w-3 h-3" />
                                 Premium
                               </span>
-                            )}
-                          </h3>
-                          <p className="text-sm text-gray-600 mb-4">
-                            للوصول إلى جميع الأدوات المتقدمة Premium توجه إلى صفحة خدمات
-                          </p>
-                          {premiumData.isActive ? (
-                            <Link to="/premium">
-                              <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                                <Sparkles className="w-4 h-4 ml-2" />
-                                توليد رسالة تعريف
-                              </Button>
-                            </Link>
-                          ) : (
+                            </h3>
+                            <p className="text-sm text-gray-600 mb-4">
+                              اشترك في Premium للوصول إلى أداة توليد رسائل التعريف بالذكاء الاصطناعي
+                            </p>
                             <Link to="/premium">
                               <Button variant="outline" className="border-yellow-500 text-yellow-700 hover:bg-yellow-50">
                                 <Crown className="w-4 h-4 ml-2" />
                                 الترقية إلى Premium
                               </Button>
                             </Link>
-                          )}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Upload CV Section */}
                     <div className="border border-gray-200 rounded-lg p-6">

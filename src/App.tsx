@@ -1,4 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { CoverLetterPage } from "./pages/CoverLetterPage";
+import { DigitalCardPage } from "./pages/DigitalCardPage";
+import { PublicCardPage } from "./pages/PublicCardPage";
+import { JobMatchPage } from "./pages/JobMatchPage";
+import { ATSConverterPage } from "./pages/ATSConverterPage";
+import { ContactPage } from "./pages/ContactPage";
 import { HomePage } from "./pages/HomePage";
 import { AboutPage } from "./pages/AboutPage";
 import { PremiumPage } from "./pages/PremiumPage";
@@ -12,14 +18,6 @@ import { JobDetailsPage } from "./pages/JobDetailsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
-import { CVBuilderPage } from "./pages/CVBuilderPage";
-import { CoverLetterPage } from "./pages/CoverLetterPage";
-import { DigitalCardPage } from "./pages/DigitalCardPage";
-import { PublicCardPage } from "./pages/PublicCardPage";
-import { JobMatchPage } from "./pages/JobMatchPage";
-import { ContactPage } from "./pages/ContactPage";
-import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
-import { TermsOfServicePage } from "./pages/TermsOfServicePage";
 import { Layout } from "./components/Layout";
 import { PaymentSuccessPage } from "./pages/PaymentSuccessPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
@@ -31,6 +29,8 @@ import { AdminAnalyticsPage } from "./pages/admin/AdminAnalyticsPage";
 import { AdminNewsPage } from "./pages/admin/AdminNewsPage";
 import { AdminContactPage } from "./pages/admin/AdminContactPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
+import { TermsOfServicePage } from "./pages/TermsOfServicePage";
 
 export default function App() {
   return (
@@ -64,11 +64,6 @@ export default function App() {
           </Route>
 
           {/* Premium Tools Routes (Outside Layout - Full Page) */}
-          <Route path="/premium/cv-builder" element={
-            <ProtectedRoute>
-              <CVBuilderPage />
-            </ProtectedRoute>
-          } />
           <Route path="/premium/cover-letter" element={
             <ProtectedRoute>
               <CoverLetterPage />
@@ -82,6 +77,11 @@ export default function App() {
           <Route path="/premium/job-match" element={
             <ProtectedRoute>
               <JobMatchPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/premium/ats-converter" element={
+            <ProtectedRoute>
+              <ATSConverterPage />
             </ProtectedRoute>
           } />
 
