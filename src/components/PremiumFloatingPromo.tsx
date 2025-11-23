@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, FileText, CreditCard, Target, Wand2 } from 'lucide-react';
+import { supabase } from '../utils/supabase/client';
 
 interface PremiumService {
   id: number;
@@ -46,10 +47,44 @@ export function PremiumFloatingPromo() {
   const [currentServiceIndex, setCurrentServiceIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [isPremium, setIsPremium] = useState(false);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   const currentService = premiumServices[currentServiceIndex];
   const Icon = currentService.icon;
+
+  // التحقق من حالة الاشتراك Premium
+  useEffect(() => {
+    checkPremiumStatus();
+  }, []);
+
+  const checkPremiumStatus = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user?.id) {
+        setIsPremium(false);
+        setLoading(false);
+        return;
+      }
+
+      const { data: subscription } = await supabase
+        .from('premium_subscriptions_8a20c00b')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', 'active')
+        .gte('end_date', new Date().toISOString())
+        .single();
+
+      setIsPremium(!!subscription);
+      setLoading(false);
+    } catch (error) {
+      console.log('Error checking premium status:', error);
+      setIsPremium(false);
+      setLoading(false);
+    }
+  };
 
   // تحديث عرض الشاشة
   useEffect(() => {
@@ -85,7 +120,8 @@ export function PremiumFloatingPromo() {
     navigate('/premium');
   };
 
-  if (!isVisible) return null;
+  // إخفاء الأيقونة للمشتركين في Premium
+  if (isPremium || !isVisible || loading) return null;
 
   // حساب نقاط الحركة بناءً على عرض الشاشة
   const maxX = windowWidth - 160; // 160 = عرض العنصر تقريباً
