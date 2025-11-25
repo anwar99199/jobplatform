@@ -874,6 +874,99 @@ app.delete("/make-server-8a20c00b/admin/users/:userId", async (c) => {
   }
 });
 
+// Set user as Premium (admin only)
+app.post("/make-server-8a20c00b/admin/users/:userId/premium", async (c) => {
+  try {
+    const userId = c.req.param("userId");
+    const body = await c.req.json();
+    const planType = body.planType || "monthly"; // Default to monthly
+    const duration = body.duration || 30; // Default to 30 days
+    
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + duration);
+    
+    // Check if subscription already exists
+    const { data: existingSub } = await supabase
+      .from('premium_subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    
+    if (existingSub) {
+      // Update existing subscription
+      const { error: updateError } = await supabase
+        .from('premium_subscriptions')
+        .update({
+          plan_type: planType,
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+          status: 'active',
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+      
+      if (updateError) {
+        console.error("Error updating premium subscription:", updateError);
+        return c.json({ success: false, message: "فشل في تحديث الاشتراك" }, 500);
+      }
+    } else {
+      // Create new subscription
+      const { error: insertError } = await supabase
+        .from('premium_subscriptions')
+        .insert({
+          user_id: userId,
+          plan_type: planType,
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+          status: 'active',
+          payment_method: 'admin',
+          payment_status: 'completed'
+        });
+      
+      if (insertError) {
+        console.error("Error creating premium subscription:", insertError);
+        return c.json({ success: false, message: "فشل في إنشاء الاشتراك" }, 500);
+      }
+    }
+    
+    return c.json({ 
+      success: true, 
+      message: "تم تعيين المستخدم كمشترك Premium بنجاح",
+      premiumEndDate: endDate.toISOString()
+    });
+  } catch (error) {
+    console.error("Error setting user premium:", error);
+    return c.json({ success: false, message: "فشل في تعيين المستخدم كمشترك Premium" }, 500);
+  }
+});
+
+// Cancel user Premium (admin only)
+app.delete("/make-server-8a20c00b/admin/users/:userId/premium", async (c) => {
+  try {
+    const userId = c.req.param("userId");
+    
+    // Delete premium subscription
+    const { error: deleteError } = await supabase
+      .from('premium_subscriptions')
+      .delete()
+      .eq('user_id', userId);
+    
+    if (deleteError) {
+      console.error("Error canceling premium subscription:", deleteError);
+      return c.json({ success: false, message: "فشل في إلغاء الاشتراك" }, 500);
+    }
+    
+    return c.json({ 
+      success: true, 
+      message: "تم إلغاء الاشتراك Premium بنجاح"
+    });
+  } catch (error) {
+    console.error("Error canceling user premium:", error);
+    return c.json({ success: false, message: "فشل في إلغاء الاشتراك" }, 500);
+  }
+});
+
 // Get Analytics (admin only)
 app.get("/make-server-8a20c00b/admin/analytics", async (c) => {
   try {
@@ -1784,12 +1877,12 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
     }
 
     // Determine plan details
-    // Normalize plan type: convert "semi-annual" to "semiannual" for DB compatibility
-    const normalizedPlanType = planType === "semi-annual" ? "semiannual" : planType;
+    // Normalize plan type: convert "semiannual" to "monthly" for DB compatibility (as DB only accepts 'monthly' or 'yearly')
+    const normalizedPlanType = (planType === "semiannual" || planType === "semi-annual") ? "monthly" : planType;
     
-    const planDetails = normalizedPlanType === "yearly" 
-      ? { amount: 10.000, duration: 12, name: "سنوي" } // 10.000 OMR
-      : { amount: 6.000, duration: 6, name: "نصف سنوي" }; // 6.000 OMR
+    const planDetails = planType === "yearly" 
+      ? { amount: 10.000, duration: 12, name: "سنوي", dbPlanType: "yearly" } // 10.000 OMR
+      : { amount: 6.000, duration: 6, name: "نصف سنوي", dbPlanType: "monthly" }; // 6.000 OMR (stored as monthly in DB)
 
     // Generate unique transaction reference
     const transactionRef = `OMANJOBS_${userId}_${Date.now()}`;
@@ -1800,7 +1893,7 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
       .insert([{
         transaction_ref: transactionRef,
         user_id: userId,
-        plan_type: normalizedPlanType,
+        plan_type: planType, // Keep original plan type in payment_sessions
         amount: planDetails.amount,
         status: 'pending',
         created_at: new Date().toISOString()
@@ -1935,12 +2028,12 @@ app.post("/make-server-8a20c00b/payment/create-session-OLD", async (c) => {
     }
 
     // Determine plan details
-    // Normalize plan type: convert "semi-annual" to "semiannual" for DB compatibility
-    const normalizedPlanType = planType === "semi-annual" ? "semiannual" : planType;
+    // Normalize plan type: convert "semiannual" to "monthly" for DB compatibility (as DB only accepts 'monthly' or 'yearly')
+    const normalizedPlanType = (planType === "semiannual" || planType === "semi-annual") ? "monthly" : planType;
     
-    const planDetails = normalizedPlanType === "yearly" 
-      ? { amount: 10.000, duration: 12, name: "سنوي" } // 10.000 OMR
-      : { amount: 6.000, duration: 6, name: "نصف سنوي" }; // 6.000 OMR
+    const planDetails = planType === "yearly" 
+      ? { amount: 10.000, duration: 12, name: "سنوي", dbPlanType: "yearly" } // 10.000 OMR
+      : { amount: 6.000, duration: 6, name: "نصف سنوي", dbPlanType: "monthly" }; // 6.000 OMR (stored as monthly in DB)
 
     // Generate unique transaction reference
     const transactionRef = `OMANJOBS_${userId}_${Date.now()}`;
@@ -2015,7 +2108,7 @@ app.post("/make-server-8a20c00b/payment/create-session-OLD", async (c) => {
       .insert([{
         transaction_ref: transactionRef,
         user_id: userId,
-        plan_type: normalizedPlanType,
+        plan_type: planType, // Keep original plan type in payment_sessions
         amount: planDetails.amount,
         status: 'pending',
         created_at: new Date().toISOString()
@@ -2100,11 +2193,14 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
         const newEndDate = new Date(currentEndDate);
         newEndDate.setMonth(newEndDate.getMonth() + durationMonths);
 
+        // Convert semiannual to monthly for DB storage (DB only accepts 'monthly' or 'yearly')
+        const dbPlanType = planType === "yearly" ? "yearly" : "monthly";
+        
         await supabase
           .from('premium_subscriptions')
           .update({
             end_date: newEndDate.toISOString(),
-            plan_type: planType,
+            plan_type: dbPlanType,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingSub.id);
@@ -2115,12 +2211,15 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
           sandboxMode: true
         });
       } else {
+        // Convert semiannual to monthly for DB storage (DB only accepts 'monthly' or 'yearly')
+        const dbPlanType = planType === "yearly" ? "yearly" : "monthly";
+        
         // Create new subscription
         const { data: newSub, error: insertError } = await supabase
           .from('premium_subscriptions')
           .insert([{
             user_id: userId,
-            plan_type: planType,
+            plan_type: dbPlanType,
             start_date: startDate.toISOString(),
             end_date: endDate.toISOString(),
             status: 'active',
@@ -2218,6 +2317,9 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
       .eq('status', 'active')
       .single();
 
+    // Convert semiannual to monthly for DB storage (DB only accepts 'monthly' or 'yearly')
+    const dbPlanType = planType === "yearly" ? "yearly" : "monthly";
+    
     if (existingSub) {
       // Update existing subscription (extend it)
       const currentEndDate = new Date(existingSub.end_date);
@@ -2228,7 +2330,7 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
         .from('premium_subscriptions')
         .update({
           end_date: newEndDate.toISOString(),
-          plan_type: planType,
+          plan_type: dbPlanType,
           updated_at: new Date().toISOString()
         })
         .eq('id', existingSub.id);
@@ -2255,7 +2357,7 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
         .from('premium_subscriptions')
         .insert([{
           user_id: userId,
-          plan_type: planType,
+          plan_type: dbPlanType,
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
           status: 'active',
@@ -2389,6 +2491,9 @@ app.post("/make-server-8a20c00b/payment/verify-OLD", async (c) => {
       .eq('status', 'active')
       .single();
 
+    // Convert semiannual to monthly for DB storage (DB only accepts 'monthly' or 'yearly')
+    const dbPlanType = planType === "yearly" ? "yearly" : "monthly";
+    
     if (existingSub) {
       // Update existing subscription (extend it)
       const currentEndDate = new Date(existingSub.end_date);
@@ -2399,7 +2504,7 @@ app.post("/make-server-8a20c00b/payment/verify-OLD", async (c) => {
         .from('premium_subscriptions')
         .update({
           end_date: newEndDate.toISOString(),
-          plan_type: planType,
+          plan_type: dbPlanType,
           payment_session_id: transactionRef,
           updated_at: new Date().toISOString()
         })
@@ -2427,7 +2532,7 @@ app.post("/make-server-8a20c00b/payment/verify-OLD", async (c) => {
         .from('premium_subscriptions')
         .insert([{
           user_id: userId,
-          plan_type: planType,
+          plan_type: dbPlanType,
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
           status: 'active',
@@ -2536,6 +2641,9 @@ app.post("/make-server-8a20c00b/payment/webhook-OLD", async (c) => {
         .eq('status', 'active')
         .single();
 
+      // Convert semiannual to monthly for DB storage (DB only accepts 'monthly' or 'yearly')
+      const dbPlanType = planType === "yearly" ? "yearly" : "monthly";
+      
       if (existingSub) {
         // Extend existing subscription
         const currentEndDate = new Date(existingSub.end_date);
@@ -2546,7 +2654,7 @@ app.post("/make-server-8a20c00b/payment/webhook-OLD", async (c) => {
           .from('premium_subscriptions')
           .update({
             end_date: newEndDate.toISOString(),
-            plan_type: planType,
+            plan_type: dbPlanType,
             payment_session_id: merchant_reference,
             updated_at: new Date().toISOString()
           })
@@ -2559,7 +2667,7 @@ app.post("/make-server-8a20c00b/payment/webhook-OLD", async (c) => {
           .from('premium_subscriptions')
           .insert([{
             user_id: userId,
-            plan_type: planType,
+            plan_type: dbPlanType,
             start_date: startDate.toISOString(),
             end_date: endDate.toISOString(),
             status: 'active',

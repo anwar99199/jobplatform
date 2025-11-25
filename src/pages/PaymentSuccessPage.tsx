@@ -4,6 +4,7 @@ import { CheckCircle, Loader2, Crown, ArrowRight } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { toast } from "sonner@2.0.3";
+import { supabase } from "../utils/supabase/client";
 
 export function PaymentSuccessPage() {
   const [searchParams] = useSearchParams();
@@ -44,6 +45,8 @@ export function PaymentSuccessPage() {
         setSuccess(true);
         setMessage(data.message || "تم تفعيل اشتراكك بنجاح!");
         toast.success("تم تفعيل اشتراكك بنجاح!");
+        // حذف الباقة المحفوظة بعد النجاح
+        localStorage.removeItem("selectedPlan");
       } else {
         setSuccess(false);
         setMessage(data.error || "فشل التحقق من الدفع");
@@ -56,6 +59,70 @@ export function PaymentSuccessPage() {
       toast.error("حدث خطأ أثناء التحقق من الدفع");
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    try {
+      // الحصول على الباقة المحفوظة من localStorage
+      const selectedPlan = localStorage.getItem("selectedPlan");
+      
+      if (!selectedPlan) {
+        toast.error("لم يتم العثور على معلومات الباقة");
+        navigate("/premium");
+        return;
+      }
+
+      // التحقق من تسجيل الدخول
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error("يرجى تسجيل الدخول أولاً");
+        navigate("/login");
+        return;
+      }
+
+      const userId = session.user.id;
+      const userEmail = session.user.email || "";
+      const userName = session.user.user_metadata?.name || "";
+
+      // إنشاء جلسة دفع جديدة
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/payment/create-session`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${publicAnonKey}`
+          },
+          body: JSON.stringify({
+            planType: selectedPlan,
+            userId,
+            userEmail,
+            userName
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error("Payment session creation failed:", data);
+        toast.error(data.error || "فشل إنشاء جلسة الدفع");
+        return;
+      }
+
+      // التوجيه إلى صفحة الدفع
+      if (data.checkoutUrl) {
+        toast.success("جاري التوجيه إلى صفحة الدفع...");
+        window.location.href = data.checkoutUrl;
+      } else {
+        toast.error("لم يتم الحصول على رابط الدفع");
+      }
+
+    } catch (error) {
+      console.error("Error retrying payment:", error);
+      toast.error("حدث خطأ أثناء إعادة المحاولة");
     }
   };
 
@@ -139,7 +206,7 @@ export function PaymentSuccessPage() {
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button
-            onClick={() => navigate("/premium")}
+            onClick={handleRetry}
             className="bg-red-600 text-white hover:bg-red-700 py-6 px-8 text-lg"
           >
             حاول مرة أخرى

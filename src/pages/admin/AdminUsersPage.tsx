@@ -10,10 +10,12 @@ import {
   Calendar,
   Mail,
   Trash2,
-  Shield
+  Shield,
+  UserPlus,
+  UserMinus
 } from "lucide-react";
 import { Input } from "../../components/ui/input";
-import { getUsers, deleteUser } from "../../utils/adminApi";
+import { getUsers, deleteUser, setUserPremium, cancelUserPremium } from "../../utils/adminApi";
 
 interface User {
   id: string;
@@ -73,6 +75,46 @@ export function AdminUsersPage() {
     } catch (err) {
       console.error("Error deleting user:", err);
       alert("حدث خطأ أثناء حذف المستخدم");
+    }
+  };
+
+  const handleSetPremium = async (userId: string, userName: string) => {
+    if (!confirm(`هل أنت متأكد من تعيين المستخدم: ${userName} كمشترك Premium؟`)) {
+      return;
+    }
+
+    try {
+      // Set Premium for 30 days (monthly plan)
+      const response = await setUserPremium(userId, "monthly", 30);
+      if (response.success) {
+        // Reload users to get updated data
+        await loadUsers();
+        alert("تم تعيين المستخدم كمشترك Premium بنجاح");
+      } else {
+        alert(response.message || "فشل تعيين المستخدم كمشترك Premium");
+      }
+    } catch (err) {
+      console.error("Error setting user premium:", err);
+      alert("حدث خطأ أثناء تعيين المستخدم كمشترك Premium");
+    }
+  };
+
+  const handleCancelPremium = async (userId: string, userName: string) => {
+    if (!confirm(`هل أنت متأكد من إلغاء الاشتراك Premium للمستخدم: ${userName}؟`)) {
+      return;
+    }
+
+    try {
+      const response = await cancelUserPremium(userId);
+      if (response.success) {
+        setUsers(users.map(user => user.id === userId ? { ...user, isPremium: false, premiumEndDate: null } : user));
+        alert("تم إلغاء الاشتراك Premium للمستخدم بنجاح");
+      } else {
+        alert("فشل إلغاء الاشتراك Premium للمستخدم");
+      }
+    } catch (err) {
+      console.error("Error canceling user premium:", err);
+      alert("حدث خطأ أثناء إلغاء الاشتراك Premium للمستخدم");
     }
   };
 
@@ -293,6 +335,30 @@ export function AdminUsersPage() {
                           <Trash2 className="h-4 w-4 ml-2" />
                           حذف
                         </Button>
+                        {!user.isPremium && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                            onClick={() => handleSetPremium(user.id, user.name)}
+                            disabled={user.role === "admin"}
+                          >
+                            <UserPlus className="h-4 w-4 ml-2" />
+                            تعيين Premium
+                          </Button>
+                        )}
+                        {user.isPremium && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                            onClick={() => handleCancelPremium(user.id, user.name)}
+                            disabled={user.role === "admin"}
+                          >
+                            <UserMinus className="h-4 w-4 ml-2" />
+                            إلغاء Premium
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}

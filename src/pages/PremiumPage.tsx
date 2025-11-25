@@ -7,9 +7,10 @@ import { toast } from "sonner@2.0.3";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 
 export function PremiumPage() {
-  const [loading, setLoading] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
+  const [loading, setLoading] = useState<"semiannual" | "yearly" | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
 
   // التحقق من حالة الاشتراك
   useEffect(() => {
@@ -60,6 +61,9 @@ export function PremiumPage() {
       const userEmail = session.user.email || "";
       const userName = session.user.user_metadata?.name || "";
 
+      // حفظ معلومات الباقة المختارة في localStorage
+      localStorage.setItem("selectedPlan", planType);
+
       // إنشاء جلسة الدفع مع Amwal Pay
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/payment/create-session`,
@@ -90,6 +94,7 @@ export function PremiumPage() {
       // التوجيه إلى صفحة الدفع
       if (data.checkoutUrl) {
         toast.success("جاري التوجيه إلى صفحة الدفع...");
+        setRedirecting(true);
         window.location.href = data.checkoutUrl;
       } else {
         toast.error("لم يتم الحصول على رابط الدفع");
@@ -279,6 +284,29 @@ export function PremiumPage() {
   // Non-Premium User View - عرض كامل مع الباقات
   return (
     <div className="container mx-auto px-4 py-12">
+      {/* Redirecting Overlay */}
+      {redirecting && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-8 max-w-md mx-4 text-center shadow-2xl">
+            <div className="flex justify-center mb-6">
+              <div className="relative">
+                <div className="w-20 h-20 border-4 border-red-200 border-t-red-600 rounded-full animate-spin"></div>
+                <Crown className="w-10 h-10 text-red-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+              </div>
+            </div>
+            <h2 className="text-2xl mb-3 text-gray-800">جاري التحويل إلى صفحة الدفع</h2>
+            <p className="text-gray-600">
+              يرجى الانتظار بينما نقوم بتحضير صفحة الدفع الآمنة...
+            </p>
+            <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-500">
+              <div className="w-2 h-2 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <div className="text-center mb-16">
         <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full mb-6">

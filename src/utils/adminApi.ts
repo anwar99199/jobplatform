@@ -282,6 +282,39 @@ export const deleteUser = async (userId: string) => {
   }
 };
 
+// Set User as Premium
+export const setUserPremium = async (userId: string, planType: string, duration: number) => {
+  try {
+    const response = await fetch(`${API_URL}/admin/users/${userId}/premium`, {
+      method: 'POST',
+      headers: getAdminHeaders(),
+      body: JSON.stringify({ planType, duration })
+    });
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Set user premium error:', error);
+    return { success: false, message: 'فشل الاتصال بالسيرفر' };
+  }
+};
+
+// Cancel User Premium
+export const cancelUserPremium = async (userId: string) => {
+  try {
+    const response = await fetch(`${API_URL}/admin/users/${userId}/premium`, {
+      method: 'DELETE',
+      headers: getAdminHeaders()
+    });
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Cancel user premium error:', error);
+    return { success: false, message: 'فشل الاتصال بالسيرفر' };
+  }
+};
+
 // Get Analytics
 export const getAnalytics = async (timeRange: "7days" | "30days" | "90days" = "30days") => {
   try {
