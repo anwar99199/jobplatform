@@ -43,7 +43,7 @@ export function PremiumPage() {
     }
   };
 
-  const handleSelectPlan = async (planType: "semi-annual" | "yearly") => {
+  const handleSelectPlan = async (planType: "semiannual" | "yearly") => {
     try {
       setLoading(planType);
 
@@ -158,7 +158,7 @@ export function PremiumPage() {
       price: "6",
       duration: "6 أشهر",
       monthly: "شهرياً 1 RO",
-      planType: "semi-annual" as const,
+      planType: "semiannual" as const,
       features: [
         "للفترة كاملة",
         "توليد Cover Letter بالذكاء الاصطناعي",

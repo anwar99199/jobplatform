@@ -1784,7 +1784,10 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
     }
 
     // Determine plan details
-    const planDetails = planType === "yearly" 
+    // Normalize plan type: convert "semi-annual" to "semiannual" for DB compatibility
+    const normalizedPlanType = planType === "semi-annual" ? "semiannual" : planType;
+    
+    const planDetails = normalizedPlanType === "yearly" 
       ? { amount: 10.000, duration: 12, name: "سنوي" } // 10.000 OMR
       : { amount: 6.000, duration: 6, name: "نصف سنوي" }; // 6.000 OMR
 
@@ -1797,7 +1800,7 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
       .insert([{
         transaction_ref: transactionRef,
         user_id: userId,
-        plan_type: planType,
+        plan_type: normalizedPlanType,
         amount: planDetails.amount,
         status: 'pending',
         created_at: new Date().toISOString()
@@ -1932,7 +1935,10 @@ app.post("/make-server-8a20c00b/payment/create-session-OLD", async (c) => {
     }
 
     // Determine plan details
-    const planDetails = planType === "yearly" 
+    // Normalize plan type: convert "semi-annual" to "semiannual" for DB compatibility
+    const normalizedPlanType = planType === "semi-annual" ? "semiannual" : planType;
+    
+    const planDetails = normalizedPlanType === "yearly" 
       ? { amount: 10.000, duration: 12, name: "سنوي" } // 10.000 OMR
       : { amount: 6.000, duration: 6, name: "نصف سنوي" }; // 6.000 OMR
 
@@ -2009,7 +2015,7 @@ app.post("/make-server-8a20c00b/payment/create-session-OLD", async (c) => {
       .insert([{
         transaction_ref: transactionRef,
         user_id: userId,
-        plan_type: planType,
+        plan_type: normalizedPlanType,
         amount: planDetails.amount,
         status: 'pending',
         created_at: new Date().toISOString()
@@ -2099,7 +2105,6 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
           .update({
             end_date: newEndDate.toISOString(),
             plan_type: planType,
-            payment_session_id: transactionRef,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingSub.id);
@@ -2119,7 +2124,6 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
             start_date: startDate.toISOString(),
             end_date: endDate.toISOString(),
             status: 'active',
-            payment_session_id: transactionRef,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }])
@@ -2225,7 +2229,6 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
         .update({
           end_date: newEndDate.toISOString(),
           plan_type: planType,
-          payment_session_id: transactionRef,
           updated_at: new Date().toISOString()
         })
         .eq('id', existingSub.id);
@@ -2256,7 +2259,6 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
           status: 'active',
-          payment_session_id: transactionRef,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }])

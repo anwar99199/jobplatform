@@ -1,4 +1,25 @@
+import { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+import { 
+  User, 
+  Crown, 
+  FileText, 
+  Edit, 
+  Trash2, 
+  LogOut, 
+  AlertCircle, 
+  CheckCircle, 
+  Calendar,
+  Upload,
+  Download,
+  X,
+  Sparkles
+} from "lucide-react";
 import { supabase } from "../utils/supabase/client";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { CoverLetterGenerator } from "../components/CoverLetterGenerator";
@@ -120,8 +141,8 @@ export function ProfilePage() {
       if (premiumSub) {
         setPremiumData({
           isActive: premiumSub.status === 'active' || false,
-          startDate: new Date(premiumSub.start_date).toLocaleDateString('ar-SA'),
-          renewalDate: new Date(premiumSub.end_date).toLocaleDateString('ar-SA'),
+          startDate: new Date(premiumSub.start_date).toLocaleDateString('en-GB'),
+          renewalDate: new Date(premiumSub.end_date).toLocaleDateString('en-GB'),
           autoRenew: true
         });
       }
