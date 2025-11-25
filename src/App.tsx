@@ -20,6 +20,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { Layout } from "./components/Layout";
 import { PaymentSuccessPage } from "./pages/PaymentSuccessPage";
+import { PaymentSandboxPage } from "./pages/PaymentSandboxPage";
 import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
 import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
 import { AdminJobsPage } from "./pages/admin/AdminJobsPage";
@@ -92,6 +93,13 @@ export default function App() {
           <Route path="/payment/success" element={
             <ProtectedRoute>
               <PaymentSuccessPage />
+            </ProtectedRoute>
+          } />
+
+          {/* Payment Sandbox Page */}
+          <Route path="/payment/sandbox" element={
+            <ProtectedRoute>
+              <PaymentSandboxPage />
             </ProtectedRoute>
           } />
 

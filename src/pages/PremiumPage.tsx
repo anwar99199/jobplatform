@@ -1,10 +1,10 @@
-import { Crown, CheckCircle, Star, Zap, FileText, Sparkles, CreditCard, TrendingUp } from "lucide-react";
+import { Crown, CheckCircle, FileText, Sparkles, CreditCard, TrendingUp } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { supabase } from "../utils/supabase/client";
 import { toast } from "sonner@2.0.3";
+import { projectId, publicAnonKey } from "../utils/supabase/info";
 
 export function PremiumPage() {
   const [loading, setLoading] = useState<string | null>(null);
@@ -60,37 +60,44 @@ export function PremiumPage() {
       const userEmail = session.user.email || "";
       const userName = session.user.user_metadata?.name || "";
 
-      // Create payment session
+      // إنشاء جلسة الدفع مع Amwal Pay
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/payment/create-session`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${publicAnonKey}`,
+            "Authorization": `Bearer ${publicAnonKey}`
           },
           body: JSON.stringify({
             planType,
             userId,
             userEmail,
             userName
-          }),
+          })
         }
       );
 
-      const result = await response.json();
+      const data = await response.json();
 
-      if (!result.success) {
-        toast.error(result.error || "فشل إنشاء جلسة الدفع");
+      if (!response.ok || !data.success) {
+        console.error("Payment session creation failed:", data);
+        toast.error(data.error || "فشل إنشاء جلسة الدفع");
         setLoading(null);
         return;
       }
 
-      // Redirect to Amwal Pay checkout
-      window.location.href = result.checkoutUrl;
+      // التوجيه إلى صفحة الدفع
+      if (data.checkoutUrl) {
+        toast.success("جاري التوجيه إلى صفحة الدفع...");
+        window.location.href = data.checkoutUrl;
+      } else {
+        toast.error("لم يتم الحصول على رابط الدفع");
+        setLoading(null);
+      }
 
     } catch (error) {
-      console.error("Error creating payment session:", error);
+      console.error("Error:", error);
       toast.error("حدث خطأ أثناء معالجة طلبك");
       setLoading(null);
     }
@@ -371,7 +378,7 @@ export function PremiumPage() {
                 onClick={() => handleSelectPlan(plan.planType)}
                 disabled={loading === plan.planType}
               >
-                {loading === plan.planType ? "جاري المعالجة..." : "اختر هذه الباقة"}
+                {loading === plan.planType ? "جاري المعالجة..." : "شراء"}
               </Button>
             </div>
           ))}
@@ -386,7 +393,7 @@ export function PremiumPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-xl mb-3 text-red-600">كيف يمكنني الاشتراك في الخدمة؟</h3>
             <p className="text-gray-700">
-              يمكنك اختيار الباقة المناسبة والضغط على "اختر هذه الباقة"، ثم إكمال عملية الدفع الآمن.
+              يمكنك اختيار الباقة المناسبة والضغط على زر "شراء"، ثم إكمال عملية الدفع الآمن.
             </p>
           </div>
 

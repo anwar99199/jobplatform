@@ -110,7 +110,7 @@ export function TermsOfServicePage() {
           </div>
           <div className="mt-6 bg-yellow-50 border-r-4 border-yellow-500 p-4">
             <p className="text-yellow-800 text-sm">
-              <strong>ملاحظة:</strong> يتم معالجة المدفوعات عبر بوابة الدفع الآمنة Amwal Pay
+              <strong>ملاحظة:</strong> نظام الدفع قيد التطوير. سيتم تفعيله قريباً عبر بوابة دفع آمنة ومرخصة.
             </p>
           </div>
         </div>

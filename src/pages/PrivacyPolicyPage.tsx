@@ -73,7 +73,7 @@ export function PrivacyPolicyPage() {
             <p className="text-gray-700 mb-3">عند شراء اشتراك:</p>
             <ul className="list-disc list-inside space-y-2 text-gray-700 mr-4">
               <li className="text-red-700 font-medium">لا نقوم بتخزين بيانات البطاقة</li>
-              <li>تتم عمليات الدفع عبر بوابة دفع مرخصة وآمنة (Amwal Pay)</li>
+              <li>ستتم عمليات الدفع عبر بوابة دفع مرخصة وآمنة (عند التفعيل)</li>
               <li>يتم تخزين فقط: رقم العملية – حالة الدفع – تاريخ العملية</li>
             </ul>
           </div>
@@ -111,7 +111,7 @@ export function PrivacyPolicyPage() {
             قد نشارك الحد الأدنى من البيانات مع:
           </p>
           <ul className="list-disc list-inside space-y-2 text-gray-700 mr-4">
-            <li>بوابة الدفع <strong>Amwal Pay</strong> لمعالجة الدفعات</li>
+            <li>بوابة الدفع المرخصة لمعالجة الدفعات (عند توفرها)</li>
             <li>مزود البريد الإلكتروني لإرسال OTP أو رسائل النظام</li>
             <li>خدمات التحليل لتحسين الموقع (مثل Google Analytics)</li>
           </ul>

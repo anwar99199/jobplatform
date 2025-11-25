@@ -1736,11 +1736,179 @@ app.put("/make-server-8a20c00b/digital-card", async (c) => {
 });
 
 // ============================================
-// AMWAL PAY PAYMENT INTEGRATION
+// PAYMENT INTEGRATION (DISABLED)
 // ============================================
 
-// Create payment session with Amwal Pay
+// Create payment session - WITH SANDBOX MODE
 app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
+  try {
+    console.log("🔵 Payment session creation started");
+    const { planType, userId, userEmail, userName } = await c.req.json();
+    
+    // Validate input
+    if (!planType || !userId) {
+      return c.json({ success: false, error: "Missing required fields" }, 400);
+    }
+
+    // Get Amwal Pay credentials from environment
+    const amwalMerchantId = Deno.env.get("AMWAL_MERCHANT_ID"); // MID
+    const amwalTerminalId = Deno.env.get("AMWAL_TERMINAL_ID"); // TID
+    const amwalSecureHash = Deno.env.get("AMWAL_SECURE_HASH"); // SECURE HASH
+    const amwalEnvironment = Deno.env.get("AMWAL_ENVIRONMENT") || "UAT"; // UAT or PRODUCTION
+    
+    // SANDBOX MODE - Default to TRUE unless explicitly disabled
+    // To use real payment: set AMWAL_SANDBOX_MODE="false" AND provide all credentials
+    const sandboxModeEnv = Deno.env.get("AMWAL_SANDBOX_MODE");
+    const hasCredentials = !!(amwalMerchantId && amwalTerminalId && amwalSecureHash);
+    
+    // Sandbox is TRUE if:
+    // 1. Not explicitly set to "false", OR
+    // 2. Credentials are missing
+    const sandboxMode = sandboxModeEnv !== "false" || !hasCredentials;
+    
+    console.log("💳 Payment Configuration:", {
+      sandboxMode,
+      sandboxEnvValue: sandboxModeEnv,
+      hasCredentials,
+      environment: amwalEnvironment,
+      reason: sandboxMode ? (sandboxModeEnv === "true" ? "Explicitly enabled" : "Missing credentials") : "Real payment mode"
+    });
+    
+    // Only require credentials if NOT in sandbox mode
+    if (!sandboxMode && (!amwalMerchantId || !amwalTerminalId || !amwalSecureHash)) {
+      console.log("⚠️ CRITICAL: Real payment mode requires credentials");
+      return c.json({ 
+        success: false, 
+        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة بيانات Amwal Pay (MID, TID, SECURE HASH) في إعدادات المشروع." 
+      }, 400);
+    }
+
+    // Determine plan details
+    const planDetails = planType === "yearly" 
+      ? { amount: 10.000, duration: 12, name: "سنوي" } // 10.000 OMR
+      : { amount: 6.000, duration: 6, name: "نصف سنوي" }; // 6.000 OMR
+
+    // Generate unique transaction reference
+    const transactionRef = `OMANJOBS_${userId}_${Date.now()}`;
+
+    // Store transaction in database FIRST
+    await supabase
+      .from('payment_sessions')
+      .insert([{
+        transaction_ref: transactionRef,
+        user_id: userId,
+        plan_type: planType,
+        amount: planDetails.amount,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      }]);
+
+    // SANDBOX MODE CHECK
+    console.log("🔍 Checking sandbox mode:", { sandboxMode, willUseSandbox: !!sandboxMode });
+    
+    if (sandboxMode) {
+      console.log("🎭 ✅ SANDBOX MODE ACTIVE: Redirecting to sandbox payment page");
+      console.log("Transaction stored:", transactionRef);
+      const origin = c.req.header("origin") || "http://localhost:3000";
+      
+      const response = {
+        success: true,
+        transactionRef: transactionRef,
+        checkoutUrl: `${origin}/payment/sandbox?ref=${transactionRef}&amount=${planDetails.amount}&plan=${planType}`,
+        sandboxMode: true,
+        message: "Sandbox mode - No real payment"
+      };
+      
+      console.log("🎭 Returning sandbox response:", response);
+      return c.json(response);
+    }
+
+    // REAL PAYMENT MODE
+    console.log("⚠️ REAL PAYMENT MODE: Connecting to Amwal Pay API");
+    const amwalApiUrl = amwalEnvironment === "PRODUCTION" 
+      ? "https://api.amwal.tech/payments/create"
+      : "https://uat.amwal.tech/payments/create";
+
+    // Generate secure hash for Amwal Pay
+    // Hash format: MID + TID + Amount + Currency + TransactionRef + SecureHash
+    const hashString = `${amwalMerchantId}${amwalTerminalId}${planDetails.amount.toFixed(3)}OMR${transactionRef}${amwalSecureHash}`;
+    
+    // Create SHA256 hash
+    const encoder = new TextEncoder();
+    const data = encoder.encode(hashString);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const secureHashValue = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    console.log("Creating Amwal payment with:", {
+      merchantId: amwalMerchantId,
+      terminalId: amwalTerminalId,
+      amount: planDetails.amount,
+      reference: transactionRef,
+      environment: amwalEnvironment
+    });
+
+    // Create payment request with Amwal Pay
+    const amwalResponse = await fetch(amwalApiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        merchantId: amwalMerchantId,
+        terminalId: amwalTerminalId,
+        amount: planDetails.amount.toFixed(3), // Format: 10.000
+        currency: "OMR",
+        transactionRef: transactionRef,
+        description: `اشتراك Premium - ${planDetails.name}`,
+        customerEmail: userEmail || "",
+        customerName: userName || "",
+        successUrl: `${c.req.header("origin") || "https://your-site.com"}/payment/success?ref=${transactionRef}`,
+        failureUrl: `${c.req.header("origin") || "https://your-site.com"}/premium?status=failed`,
+        cancelUrl: `${c.req.header("origin") || "https://your-site.com"}/premium?status=cancelled`,
+        secureHash: secureHashValue,
+        metadata: JSON.stringify({
+          user_id: userId,
+          plan_type: planType,
+          duration_months: planDetails.duration.toString()
+        })
+      })
+    });
+
+    const result = await amwalResponse.json();
+
+    console.log("Amwal Pay response:", JSON.stringify(result, null, 2));
+
+    if (!amwalResponse.ok || !result.success) {
+      console.error("Amwal Pay API error:", result);
+      return c.json({ 
+        success: false, 
+        error: result.message || "فشل إنشاء جلسة الدفع",
+        details: result 
+      }, 500);
+    }
+
+    // Return payment URL (transaction already stored above)
+    return c.json({
+      success: true,
+      transactionRef: transactionRef,
+      checkoutUrl: result.paymentUrl || result.redirectUrl || result.data?.payment_url,
+      transactionData: result
+    });
+
+  } catch (error) {
+    console.error("Error creating payment session:", error);
+    return c.json({ 
+      success: false, 
+      error: "حدث خطأ أثناء إنشاء جلسة الدفع",
+      details: String(error) 
+    }, 500);
+  }
+});
+
+// ORIGINAL CODE COMMENTED OUT
+/*
+app.post("/make-server-8a20c00b/payment/create-session-OLD", async (c) => {
   try {
     const { planType, userId, userEmail, userName } = await c.req.json();
     
@@ -1749,58 +1917,88 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
       return c.json({ success: false, error: "Missing required fields" }, 400);
     }
 
-    // Get Amwal Pay API key from environment
-    const amwalMerchantId = Deno.env.get("AMWAL_MERCHANT_ID");
-    const amwalApiKey = Deno.env.get("AMWAL_API_KEY");
+    // Get Amwal Pay credentials from environment
+    const amwalMerchantId = Deno.env.get("AMWAL_MERCHANT_ID"); // MID
+    const amwalTerminalId = Deno.env.get("AMWAL_TERMINAL_ID"); // TID
+    const amwalSecureHash = Deno.env.get("AMWAL_SECURE_HASH"); // SECURE HASH
+    const amwalEnvironment = Deno.env.get("AMWAL_ENVIRONMENT") || "UAT"; // UAT or PRODUCTION
     
-    if (!amwalMerchantId || !amwalApiKey) {
+    if (!amwalMerchantId || !amwalTerminalId || !amwalSecureHash) {
       console.log("AMWAL credentials not configured - payment system not available");
       return c.json({ 
         success: false, 
-        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة مفاتيح Amwal Pay في إعدادات المشروع." 
+        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة بيانات Amwal Pay (MID, TID, SECURE HASH) في إعدادات المشروع." 
       }, 400);
     }
 
     // Determine plan details
     const planDetails = planType === "yearly" 
-      ? { amount: 10.00, duration: 12, name: "سنوي" } // 10 OMR
-      : { amount: 6.00, duration: 6, name: "نصف سنوي" }; // 6 OMR
+      ? { amount: 10.000, duration: 12, name: "سنوي" } // 10.000 OMR
+      : { amount: 6.000, duration: 6, name: "نصف سنوي" }; // 6.000 OMR
 
     // Generate unique transaction reference
     const transactionRef = `OMANJOBS_${userId}_${Date.now()}`;
 
+    // Amwal Pay API base URL (UAT or Production)
+    const amwalApiUrl = amwalEnvironment === "PRODUCTION" 
+      ? "https://api.amwal.tech/payments/create"
+      : "https://uat.amwal.tech/payments/create";
+
+    // Generate secure hash for Amwal Pay
+    // Hash format: MID + TID + Amount + Currency + TransactionRef + SecureHash
+    const hashString = `${amwalMerchantId}${amwalTerminalId}${planDetails.amount.toFixed(3)}OMR${transactionRef}${amwalSecureHash}`;
+    
+    // Create SHA256 hash
+    const encoder = new TextEncoder();
+    const data = encoder.encode(hashString);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const secureHashValue = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    console.log("Creating Amwal payment with:", {
+      merchantId: amwalMerchantId,
+      terminalId: amwalTerminalId,
+      amount: planDetails.amount,
+      reference: transactionRef,
+      environment: amwalEnvironment
+    });
+
     // Create payment request with Amwal Pay
-    const amwalResponse = await fetch("https://api.amwal.tech/v1/transactions", {
+    const amwalResponse = await fetch(amwalApiUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${amwalApiKey}`,
-        "X-Merchant-ID": amwalMerchantId
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        amount: planDetails.amount,
+        merchantId: amwalMerchantId,
+        terminalId: amwalTerminalId,
+        amount: planDetails.amount.toFixed(3), // Format: 10.000
         currency: "OMR",
+        transactionRef: transactionRef,
         description: `اشتراك Premium - ${planDetails.name}`,
-        merchant_reference: transactionRef,
-        customer_email: userEmail || "",
-        customer_name: userName || "",
-        callback_url: `${c.req.header("origin") || "https://your-site.com"}/payment/success`,
-        cancel_url: `${c.req.header("origin") || "https://your-site.com"}/premium`,
-        metadata: {
+        customerEmail: userEmail || "",
+        customerName: userName || "",
+        successUrl: `${c.req.header("origin") || "https://your-site.com"}/payment/success?ref=${transactionRef}`,
+        failureUrl: `${c.req.header("origin") || "https://your-site.com"}/premium?status=failed`,
+        cancelUrl: `${c.req.header("origin") || "https://your-site.com"}/premium?status=cancelled`,
+        secureHash: secureHashValue,
+        metadata: JSON.stringify({
           user_id: userId,
           plan_type: planType,
           duration_months: planDetails.duration.toString()
-        }
+        })
       })
     });
 
     const result = await amwalResponse.json();
 
-    if (!amwalResponse.ok || result.status !== "success") {
+    console.log("Amwal Pay response:", JSON.stringify(result, null, 2));
+
+    if (!amwalResponse.ok || !result.success) {
       console.error("Amwal Pay API error:", result);
       return c.json({ 
         success: false, 
-        error: "فشل إنشاء جلسة الدفع",
+        error: result.message || "فشل إنشاء جلسة الدفع",
         details: result 
       }, 500);
     }
@@ -1821,8 +2019,8 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
     return c.json({
       success: true,
       transactionRef: transactionRef,
-      checkoutUrl: result.data.payment_url,
-      transactionData: result.data
+      checkoutUrl: result.paymentUrl || result.redirectUrl || result.data?.payment_url,
+      transactionData: result
     });
 
   } catch (error) {
@@ -1834,8 +2032,9 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
     }, 500);
   }
 });
+*/
 
-// Verify payment and activate subscription with Amwal Pay
+// Verify payment - WITH SANDBOX SUPPORT
 app.post("/make-server-8a20c00b/payment/verify", async (c) => {
   try {
     const { transactionRef } = await c.req.json();
@@ -1844,25 +2043,286 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
       return c.json({ success: false, error: "Missing transaction reference" }, 400);
     }
 
-    const amwalMerchantId = Deno.env.get("AMWAL_MERCHANT_ID");
-    const amwalApiKey = Deno.env.get("AMWAL_API_KEY");
-    
-    if (!amwalMerchantId || !amwalApiKey) {
-      console.log("AMWAL credentials not configured - payment verification not available");
+    const sandboxMode = Deno.env.get("AMWAL_SANDBOX_MODE") === "true";
+
+    // Get payment session from database FIRST
+    const { data: paymentSession, error: sessionError } = await supabase
+      .from('payment_sessions')
+      .select('*')
+      .eq('transaction_ref', transactionRef)
+      .single();
+
+    if (sessionError || !paymentSession) {
+      console.error("Payment session not found:", sessionError);
       return c.json({ 
         success: false, 
-        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة مفاتيح Amwal Pay." 
+        error: "جلسة الدفع غير موجودة" 
       }, 400);
     }
 
+    const userId = paymentSession.user_id;
+    const planType = paymentSession.plan_type;
+    const durationMonths = planType === "yearly" ? 12 : 6;
+
+    if (!userId) {
+      return c.json({ 
+        success: false, 
+        error: "معلومات المستخدم مفقودة" 
+      }, 400);
+    }
+
+    // SANDBOX MODE - قبول الدفع مباشرة
+    if (sandboxMode) {
+      console.log("🎭 SANDBOX MODE: Auto-accepting payment for", transactionRef);
+      
+      // Calculate subscription dates
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + durationMonths);
+
+      // Check if user already has an active subscription
+      const { data: existingSub } = await supabase
+        .from('premium_subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .single();
+
+      if (existingSub) {
+        // Update existing subscription (extend it)
+        const currentEndDate = new Date(existingSub.end_date);
+        const newEndDate = new Date(currentEndDate);
+        newEndDate.setMonth(newEndDate.getMonth() + durationMonths);
+
+        await supabase
+          .from('premium_subscriptions')
+          .update({
+            end_date: newEndDate.toISOString(),
+            plan_type: planType,
+            payment_session_id: transactionRef,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSub.id);
+
+        return c.json({
+          success: true,
+          message: "تم تمديد اشتراكك بنجاح (Sandbox)",
+          sandboxMode: true
+        });
+      } else {
+        // Create new subscription
+        const { data: newSub, error: insertError } = await supabase
+          .from('premium_subscriptions')
+          .insert([{
+            user_id: userId,
+            plan_type: planType,
+            start_date: startDate.toISOString(),
+            end_date: endDate.toISOString(),
+            status: 'active',
+            payment_session_id: transactionRef,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error("Error creating subscription:", insertError);
+          return c.json({ 
+            success: false, 
+            error: "فشل إنشاء الاشتراك" 
+          }, 500);
+        }
+
+        return c.json({
+          success: true,
+          message: "تم تفعيل اشتراكك بنجاح (Sandbox)",
+          subscription: toCamelCase(newSub),
+          sandboxMode: true
+        });
+      }
+    }
+
+    // REAL PAYMENT MODE - التحقق مع Amwal Pay
+    const amwalMerchantId = Deno.env.get("AMWAL_MERCHANT_ID");
+    const amwalTerminalId = Deno.env.get("AMWAL_TERMINAL_ID");
+    const amwalSecureHash = Deno.env.get("AMWAL_SECURE_HASH");
+    const amwalEnvironment = Deno.env.get("AMWAL_ENVIRONMENT") || "UAT";
+    
+    if (!amwalMerchantId || !amwalTerminalId || !amwalSecureHash) {
+      console.log("AMWAL credentials not configured - payment verification not available");
+      return c.json({ 
+        success: false, 
+        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة بيانات Amwal Pay." 
+      }, 400);
+    }
+
+    // Amwal Pay API base URL (UAT or Production)
+    const amwalApiUrl = amwalEnvironment === "PRODUCTION" 
+      ? "https://api.amwal.tech/payments/status"
+      : "https://uat.amwal.tech/payments/status";
+
     // Get transaction details from Amwal Pay
     const amwalResponse = await fetch(
-      `https://api.amwal.tech/v1/transactions/${transactionRef}`,
+      `${amwalApiUrl}?transactionRef=${transactionRef}&merchantId=${amwalMerchantId}`,
       {
         method: "GET",
         headers: {
-          "Authorization": `Bearer ${amwalApiKey}`,
-          "X-Merchant-ID": amwalMerchantId
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    const result = await amwalResponse.json();
+
+    if (!amwalResponse.ok || result.status !== "success") {
+      console.error("Error verifying payment:", result);
+      return c.json({ 
+        success: false, 
+        error: "فشل التحقق من الدفع" 
+      }, 500);
+    }
+
+    const transaction = result.data;
+
+    // Check if payment was successful
+    if (transaction.payment_status !== "completed" && transaction.payment_status !== "success") {
+      return c.json({
+        success: false,
+        error: "الدفع غير مكتمل",
+        paymentStatus: transaction.payment_status
+      }, 400);
+    }
+
+    if (!userId) {
+      return c.json({ 
+        success: false, 
+        error: "معلومات المستخدم مفقودة" 
+      }, 400);
+    }
+
+    // Calculate subscription dates
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + durationMonths);
+
+    // Check if user already has an active subscription
+    const { data: existingSub, error: checkError } = await supabase
+      .from('premium_subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .single();
+
+    if (existingSub) {
+      // Update existing subscription (extend it)
+      const currentEndDate = new Date(existingSub.end_date);
+      const newEndDate = new Date(currentEndDate);
+      newEndDate.setMonth(newEndDate.getMonth() + durationMonths);
+
+      const { error: updateError } = await supabase
+        .from('premium_subscriptions')
+        .update({
+          end_date: newEndDate.toISOString(),
+          plan_type: planType,
+          payment_session_id: transactionRef,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingSub.id);
+
+      if (updateError) {
+        console.error("Error updating subscription:", updateError);
+        return c.json({ 
+          success: false, 
+          error: "فشل تحديث الاشتراك" 
+        }, 500);
+      }
+
+      return c.json({
+        success: true,
+        message: "تم تمديد اشتراكك بنجاح",
+        subscription: {
+          ...existingSub,
+          endDate: newEndDate.toISOString()
+        }
+      });
+    } else {
+      // Create new subscription
+      const { data: newSub, error: insertError } = await supabase
+        .from('premium_subscriptions')
+        .insert([{
+          user_id: userId,
+          plan_type: planType,
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+          status: 'active',
+          payment_session_id: transactionRef,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("Error creating subscription:", insertError);
+        return c.json({ 
+          success: false, 
+          error: "فشل إنشاء الاشتراك" 
+        }, 500);
+      }
+
+      return c.json({
+        success: true,
+        message: "تم تفعيل اشتراكك بنجاح",
+        subscription: toCamelCase(newSub)
+      });
+    }
+
+  } catch (error) {
+    console.error("Error verifying payment:", error);
+    return c.json({ 
+      success: false, 
+      error: "حدث خطأ أثناء التحقق من الدفع",
+      details: String(error) 
+    }, 500);
+  }
+});
+
+// ORIGINAL CODE COMMENTED OUT
+/*
+app.post("/make-server-8a20c00b/payment/verify-OLD", async (c) => {
+  try {
+    const { transactionRef } = await c.req.json();
+
+    if (!transactionRef) {
+      return c.json({ success: false, error: "Missing transaction reference" }, 400);
+    }
+
+    const amwalMerchantId = Deno.env.get("AMWAL_MERCHANT_ID");
+    const amwalTerminalId = Deno.env.get("AMWAL_TERMINAL_ID");
+    const amwalSecureHash = Deno.env.get("AMWAL_SECURE_HASH");
+    const amwalEnvironment = Deno.env.get("AMWAL_ENVIRONMENT") || "UAT";
+    
+    if (!amwalMerchantId || !amwalTerminalId || !amwalSecureHash) {
+      console.log("AMWAL credentials not configured - payment verification not available");
+      return c.json({ 
+        success: false, 
+        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة بيانات Amwal Pay." 
+      }, 400);
+    }
+
+    // Amwal Pay API base URL (UAT or Production)
+    const amwalApiUrl = amwalEnvironment === "PRODUCTION" 
+      ? "https://api.amwal.tech/payments/status"
+      : "https://uat.amwal.tech/payments/status";
+
+    // Get transaction details from Amwal Pay
+    const amwalResponse = await fetch(
+      `${amwalApiUrl}?transactionRef=${transactionRef}&merchantId=${amwalMerchantId}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json"
         }
       }
     );
@@ -2000,6 +2460,169 @@ app.post("/make-server-8a20c00b/payment/verify", async (c) => {
     }, 500);
   }
 });
+*/
+
+// Webhook - DISABLED
+app.post("/make-server-8a20c00b/payment/webhook", async (c) => {
+  console.log("Webhook is disabled");
+  return c.json({ 
+    success: false, 
+    message: "Webhook disabled" 
+  }, 503);
+});
+
+// ORIGINAL CODE COMMENTED OUT
+/*
+app.post("/make-server-8a20c00b/payment/webhook-OLD", async (c) => {
+  try {
+    const payload = await c.req.json();
+    
+    console.log("Amwal Pay webhook received:", JSON.stringify(payload, null, 2));
+
+    // Verify webhook authenticity (Amwal should send a signature header)
+    const webhookSignature = c.req.header("X-Amwal-Signature");
+    const amwalApiKey = Deno.env.get("AMWAL_API_KEY");
+    
+    // TODO: Implement signature verification if Amwal provides it
+    // For now, we'll process the webhook
+    
+    const { 
+      event_type, 
+      transaction_id, 
+      merchant_reference, 
+      payment_status,
+      amount,
+      currency 
+    } = payload;
+
+    // Handle different event types
+    if (event_type === "payment.success" || payment_status === "completed" || payment_status === "success") {
+      console.log(`Payment successful for transaction: ${merchant_reference}`);
+      
+      // Get payment session from database
+      const { data: paymentSession, error: sessionError } = await supabase
+        .from('payment_sessions')
+        .select('*')
+        .eq('transaction_ref', merchant_reference)
+        .single();
+
+      if (sessionError || !paymentSession) {
+        console.error("Payment session not found for webhook:", sessionError);
+        return c.json({ success: false, error: "Payment session not found" }, 400);
+      }
+
+      // Check if already processed
+      if (paymentSession.status === 'completed') {
+        console.log("Payment already processed, skipping");
+        return c.json({ success: true, message: "Already processed" });
+      }
+
+      const userId = paymentSession.user_id;
+      const planType = paymentSession.plan_type;
+      const durationMonths = planType === "yearly" ? 12 : 6;
+
+      // Calculate subscription dates
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + durationMonths);
+
+      // Check if user already has an active subscription
+      const { data: existingSub } = await supabase
+        .from('premium_subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .single();
+
+      if (existingSub) {
+        // Extend existing subscription
+        const currentEndDate = new Date(existingSub.end_date);
+        const newEndDate = new Date(currentEndDate);
+        newEndDate.setMonth(newEndDate.getMonth() + durationMonths);
+
+        await supabase
+          .from('premium_subscriptions')
+          .update({
+            end_date: newEndDate.toISOString(),
+            plan_type: planType,
+            payment_session_id: merchant_reference,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSub.id);
+
+        console.log(`Subscription extended for user ${userId} until ${newEndDate.toISOString()}`);
+      } else {
+        // Create new subscription
+        await supabase
+          .from('premium_subscriptions')
+          .insert([{
+            user_id: userId,
+            plan_type: planType,
+            start_date: startDate.toISOString(),
+            end_date: endDate.toISOString(),
+            status: 'active',
+            payment_session_id: merchant_reference,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }]);
+
+        console.log(`New subscription created for user ${userId} until ${endDate.toISOString()}`);
+      }
+
+      // Update payment session status
+      await supabase
+        .from('payment_sessions')
+        .update({ 
+          status: 'completed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('transaction_ref', merchant_reference);
+
+      return c.json({ success: true, message: "Payment processed successfully" });
+
+    } else if (event_type === "payment.failed" || payment_status === "failed") {
+      console.log(`Payment failed for transaction: ${merchant_reference}`);
+      
+      // Update payment session status
+      await supabase
+        .from('payment_sessions')
+        .update({ 
+          status: 'failed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('transaction_ref', merchant_reference);
+
+      return c.json({ success: true, message: "Payment failure recorded" });
+
+    } else if (event_type === "payment.cancelled" || payment_status === "cancelled") {
+      console.log(`Payment cancelled for transaction: ${merchant_reference}`);
+      
+      // Update payment session status
+      await supabase
+        .from('payment_sessions')
+        .update({ 
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('transaction_ref', merchant_reference);
+
+      return c.json({ success: true, message: "Payment cancellation recorded" });
+
+    } else {
+      console.log(`Unknown webhook event type: ${event_type}, status: ${payment_status}`);
+      return c.json({ success: true, message: "Event received" });
+    }
+
+  } catch (error) {
+    console.error("Error processing webhook:", error);
+    return c.json({ 
+      success: false, 
+      error: "Webhook processing error",
+      details: String(error) 
+    }, 500);
+  }
+});
+*/
 
 // ============================================
 // NEWS MANAGEMENT
