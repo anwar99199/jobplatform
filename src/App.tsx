@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
 import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { DigitalCardPage } from "./pages/DigitalCardPage";
 import { PublicCardPage } from "./pages/PublicCardPage";
@@ -34,6 +35,41 @@ import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
 import { TermsOfServicePage } from "./pages/TermsOfServicePage";
 
 export default function App() {
+  // Load Amwal Pay SmartBox script on mount
+  useEffect(() => {
+    // Check if script is already loaded to avoid duplicates
+    const existingScript = document.querySelector('script[src*="SmartBox.js"]');
+    if (existingScript) {
+      console.log("✅ Amwal Pay SmartBox script already loaded");
+      return;
+    }
+
+    // Create script element for Amwal Pay UAT environment
+    const script = document.createElement('script');
+    script.src = 'https://test.amwalpg.com:7443/js/SmartBox.js?v=1.1';
+    script.async = true;
+    
+    // Add success and error handlers
+    script.onload = () => {
+      console.log("✅ Amwal Pay SmartBox script loaded successfully");
+    };
+    
+    script.onerror = () => {
+      console.error("❌ Failed to load Amwal Pay SmartBox script");
+    };
+
+    // Append to document body
+    document.body.appendChild(script);
+
+    // Cleanup function to remove script on unmount
+    return () => {
+      const scriptToRemove = document.querySelector('script[src*="SmartBox.js"]');
+      if (scriptToRemove) {
+        document.body.removeChild(scriptToRemove);
+      }
+    };
+  }, []);
+
   return (
     <Router>
       <div className="min-h-screen bg-gray-50" dir="rtl">

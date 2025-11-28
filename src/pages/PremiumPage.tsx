@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../utils/supabase/client";
 import { toast } from "sonner@2.0.3";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
+import { initializeSmartBox, waitForSmartBox, PaymentCompleteData, PaymentErrorData } from "../utils/amwal-smartbox";
 
 export function PremiumPage() {
   const [isPremium, setIsPremium] = useState(false);
@@ -53,6 +54,7 @@ export function PremiumPage() {
       
       if (!session) {
         toast.error("يرجى تسجيل الدخول أولاً");
+        setLoading(null);
         window.location.href = "/login";
         return;
       }
@@ -64,42 +66,96 @@ export function PremiumPage() {
       // حفظ معلومات الباقة المختارة في localStorage
       localStorage.setItem("selectedPlan", planType);
 
-      // إنشاء جلسة الدفع مع Amwal Pay
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/payment/create-session`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${publicAnonKey}`
-          },
-          body: JSON.stringify({
-            planType,
-            userId,
-            userEmail,
-            userName
-          })
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        console.error("Payment session creation failed:", data);
-        toast.error(data.error || "فشل إنشاء جلسة الدفع");
+      // Wait for SmartBox to load (if not already loaded)
+      console.log("🔄 Checking SmartBox availability...");
+      const smartBoxLoaded = await waitForSmartBox(5000); // Wait up to 5 seconds
+      
+      if (!smartBoxLoaded) {
+        toast.error("نظام الدفع غير محمّل. يرجى إعادة تحميل الصفحة.");
         setLoading(null);
         return;
       }
 
-      // التوجيه إلى صفحة الدفع
-      if (data.checkoutUrl) {
-        toast.success("جاري التوجيه إلى صفحة الدفع...");
-        setRedirecting(true);
-        window.location.href = data.checkoutUrl;
-      } else {
-        toast.error("لم يتم الحصول على رابط الدفع");
+      console.log("✅ SmartBox is available");
+      toast.info("جاري تحضير نافذة الدفع...");
+
+      // Initialize SmartBox with callbacks
+      const result = await initializeSmartBox(
+        planType,
+        userId,
+        userEmail,
+        userName,
+        // Success callback
+        async (paymentData: PaymentCompleteData) => {
+          console.log("✅ Payment completed:", paymentData);
+          
+          // Show loading overlay
+          setRedirecting(true);
+          toast.success("تم الدفع بنجاح! جاري تفعيل اشتراكك...");
+          
+          // Verify payment on server and activate subscription
+          try {
+            const verifyResponse = await fetch(
+              `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/payment/verify`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${publicAnonKey}`
+                },
+                body: JSON.stringify({
+                  transactionRef: paymentData.MerchantReference,
+                  transactionId: paymentData.TransactionId,
+                  userId: userId
+                })
+              }
+            );
+
+            const verifyData = await verifyResponse.json();
+            
+            if (verifyData.success) {
+              toast.success("تم تفعيل اشتراكك بنجاح!");
+              // Redirect to success page
+              window.location.href = "/payment/success";
+            } else {
+              toast.error("تم الدفع ولكن حدث خطأ في التفعيل. يرجى التواصل مع الدعم.");
+              setRedirecting(false);
+              setLoading(null);
+            }
+          } catch (error) {
+            console.error("Error verifying payment:", error);
+            toast.error("حدث خطأ في التحقق من الدفع. يرجى التواصل مع الدعم.");
+            setRedirecting(false);
+            setLoading(null);
+          }
+        },
+        // Error callback
+        (errorData: PaymentErrorData) => {
+          console.error("❌ Payment error:", errorData);
+          toast.error(`فشل الدفع: ${errorData.ErrorMessage || "خطأ غير معروف"}`);
+          setLoading(null);
+        },
+        // Cancel callback
+        () => {
+          console.log("⚠️ Payment cancelled by user");
+          toast.warning("تم إلغاء عملية الدفع");
+          setLoading(null);
+        }
+      );
+
+      if (!result.success) {
+        toast.error(result.error || "فشل تهيئة نظام الدفع");
         setLoading(null);
+        return;
       }
+
+      // If sandbox mode, show info
+      if (result.sandboxMode) {
+        toast.info("🎭 وضع التجربة - لن يتم خصم أي مبلغ حقيقي");
+      }
+
+      // Loading will be cleared by callbacks
+      console.log("✅ SmartBox initialized successfully");
 
     } catch (error) {
       console.error("Error:", error);

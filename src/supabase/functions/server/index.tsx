@@ -932,7 +932,7 @@ app.post("/make-server-8a20c00b/admin/users/:userId/premium", async (c) => {
     
     return c.json({ 
       success: true, 
-      message: "تم تعيين المستخدم كمشترك Premium بنجاح",
+      message: "تم تعيين المستخدم كم��ترك Premium بنجاح",
       premiumEndDate: endDate.toISOString()
     });
   } catch (error) {
@@ -1997,6 +1997,196 @@ app.post("/make-server-8a20c00b/payment/create-session", async (c) => {
     return c.json({ 
       success: false, 
       error: "حدث خطأ أثناء إنشاء جلسة الدفع",
+      details: String(error) 
+    }, 500);
+  }
+});
+
+// ============================================
+// AMWAL PAY SMARTBOX CONFIGURATION
+// ============================================
+
+// Prepare SmartBox configuration with secure hash
+app.post("/make-server-8a20c00b/payment/prepare-smartbox", async (c) => {
+  try {
+    console.log("🔵 SmartBox configuration preparation started");
+    const { planType, userId, userEmail, userName } = await c.req.json();
+    
+    // Validate input
+    if (!planType || !userId) {
+      return c.json({ success: false, error: "Missing required fields" }, 400);
+    }
+
+    // Get Amwal Pay credentials from environment
+    const amwalMerchantId = Deno.env.get("AMWAL_MERCHANT_ID"); // MID
+    const amwalTerminalId = Deno.env.get("AMWAL_TERMINAL_ID"); // TID
+    const amwalSecureHashKey = Deno.env.get("AMWAL_SECURE_HASH"); // SECURE HASH KEY
+    const amwalEnvironment = Deno.env.get("AMWAL_ENVIRONMENT") || "UAT"; // UAT or PRODUCTION
+    
+    // SANDBOX MODE - Default to TRUE unless explicitly disabled
+    const sandboxModeEnv = Deno.env.get("AMWAL_SANDBOX_MODE");
+    const hasCredentials = !!(amwalMerchantId && amwalTerminalId && amwalSecureHashKey);
+    
+    // Sandbox is TRUE if not explicitly set to "false" OR credentials are missing
+    const sandboxMode = sandboxModeEnv !== "false" || !hasCredentials;
+    
+    console.log("💳 SmartBox Configuration:", {
+      sandboxMode,
+      sandboxEnvValue: sandboxModeEnv,
+      hasCredentials,
+      environment: amwalEnvironment,
+      reason: sandboxMode ? (sandboxModeEnv === "true" ? "Explicitly enabled" : "Missing credentials") : "Real payment mode"
+    });
+    
+    // Only require credentials if NOT in sandbox mode
+    if (!sandboxMode && (!amwalMerchantId || !amwalTerminalId || !amwalSecureHashKey)) {
+      console.log("⚠️ CRITICAL: Real payment mode requires credentials");
+      return c.json({ 
+        success: false, 
+        error: "نظام الدفع غير مكتمل الإعداد. يرجى إضافة بيانات Amwal Pay (MID, TID, SECURE HASH) في إعدادات المشروع." 
+      }, 400);
+    }
+
+    // Determine plan details
+    const planDetails = planType === "yearly" 
+      ? { amount: 10.000, duration: 12, name: "سنوي", dbPlanType: "yearly" } 
+      : { amount: 6.000, duration: 6, name: "نصف سنوي", dbPlanType: "monthly" };
+
+    // Generate unique transaction reference
+    const transactionRef = `OMANJOBS_${userId}_${Date.now()}`;
+    
+    // Current date-time in ISO format (for both sandbox and real payment)
+    const now = new Date();
+    const requestDateTime = now.toISOString();
+
+    // Store transaction in database FIRST
+    await supabase
+      .from('payment_sessions')
+      .insert([{
+        transaction_ref: transactionRef,
+        user_id: userId,
+        plan_type: planType,
+        amount: planDetails.amount,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      }]);
+
+    console.log("✅ Transaction stored in database:", transactionRef);
+
+    // SANDBOX MODE CHECK
+    if (sandboxMode) {
+      console.log("🎭 ✅ SANDBOX MODE: Returning mock configuration");
+      
+      // Return mock configuration for sandbox
+      return c.json({
+        success: true,
+        sandboxMode: true,
+        config: {
+          MID: "SANDBOX_MERCHANT",
+          TID: "SANDBOX_TERMINAL",
+          CurrencyId: 512, // OMR
+          AmountTrxn: planDetails.amount,
+          MerchantReference: transactionRef,
+          LanguageId: 'ar',
+          PaymentViewType: 1, // Popup
+          TrxDateTime: requestDateTime, // Use ISO format
+          SessionToken: null,
+          ContactInfoType: 2, // Email only
+          SecureHash: "SANDBOX_HASH_NOT_VALIDATED"
+        },
+        message: "Sandbox mode - No real payment will be processed"
+      });
+    }
+
+    // REAL PAYMENT MODE - Generate secure hash using HMAC-SHA256
+    console.log("⚠️ REAL PAYMENT MODE: Generating secure hash with HMAC-SHA256");
+    
+    // Build hash string according to Amwal Pay documentation
+    // IMPORTANT: Parameters must be sorted alphabetically by key
+    // Format: key1=value1&key2=value2&...
+    const hashParams = {
+      Amount: planDetails.amount.toString(),
+      CurrencyId: "512",
+      MerchantId: amwalMerchantId,
+      MerchantReference: transactionRef,
+      RequestDateTime: requestDateTime,
+      SessionToken: "", // Empty for non-recurring payments
+      TerminalId: amwalTerminalId
+    };
+
+    // Sort parameters alphabetically and concatenate
+    const sortedKeys = Object.keys(hashParams).sort();
+    const hashString = sortedKeys
+      .map(key => `${key}=${hashParams[key as keyof typeof hashParams]}`)
+      .join('&');
+    
+    console.log("🔐 Hash calculation:", {
+      merchantId: amwalMerchantId,
+      terminalId: amwalTerminalId,
+      amount: hashParams.Amount,
+      reference: transactionRef,
+      dateTime: requestDateTime,
+      hashKeyPresent: !!amwalSecureHashKey,
+      hashStringLength: hashString.length
+    });
+
+    // Convert the HEX secret key to binary (as per Amwal documentation)
+    const hexKeyBytes = new Uint8Array(
+      amwalSecureHashKey!.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16))
+    );
+
+    // Import the key for HMAC
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      hexKeyBytes,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    // Calculate HMAC-SHA256
+    const encoder = new TextEncoder();
+    const data = encoder.encode(hashString);
+    const signature = await crypto.subtle.sign('HMAC', cryptoKey, data);
+    
+    // Convert to hex and uppercase
+    const hashArray = Array.from(new Uint8Array(signature));
+    const secureHashValue = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+    console.log("✅ Secure hash generated successfully using HMAC-SHA256");
+
+    // Return complete SmartBox configuration
+    // NOTE: SmartBox uses MID/TID/AmountTrxn/TrxDateTime in the config
+    // but SecureHash uses MerchantId/TerminalId/Amount/RequestDateTime
+    return c.json({
+      success: true,
+      sandboxMode: false,
+      config: {
+        MID: amwalMerchantId,
+        TID: amwalTerminalId,
+        CurrencyId: 512, // OMR (Omani Rial)
+        AmountTrxn: planDetails.amount,
+        MerchantReference: transactionRef,
+        LanguageId: 'ar', // Arabic
+        PaymentViewType: 1, // 1 = Popup, 2 = Full Screen
+        TrxDateTime: requestDateTime, // Use ISO format RequestDateTime
+        SessionToken: null, // For recurring payments - not used
+        ContactInfoType: 2, // 1=all, 2=email, 3=phone, 4=none
+        SecureHash: secureHashValue
+      },
+      transactionRef: transactionRef,
+      planDetails: {
+        name: planDetails.name,
+        amount: planDetails.amount,
+        duration: planDetails.duration
+      }
+    });
+
+  } catch (error) {
+    console.error("Error preparing SmartBox configuration:", error);
+    return c.json({ 
+      success: false, 
+      error: "حدث خطأ أثناء إعداد نظام الدفع",
       details: String(error) 
     }, 500);
   }
@@ -3479,7 +3669,7 @@ app.post("/make-server-8a20c00b/ai/download-cover-letter", async (c) => {
   
   <div class="footer">
     <p class="signature">
-      ${isArabic ? 'مع أطيب التحيات،' : 'Sincerely,'}<br>
+      ${isArabic ? '��ع أطيب التحيات،' : 'Sincerely,'}<br>
       <strong>${userName}</strong>
     </p>
   </div>
