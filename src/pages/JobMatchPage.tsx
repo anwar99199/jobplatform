@@ -101,6 +101,8 @@ export function JobMatchPage() {
       const result = await getJobs();
       if (result.success && result.jobs) {
         setJobs(result.jobs);
+      } else {
+        console.error("Failed to load jobs:", result.error);
       }
     } catch (error) {
       console.error("Error loading jobs:", error);

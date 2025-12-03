@@ -45,6 +45,8 @@ export function AdminJobsPage() {
       const response = await getJobs();
       if (response.success) {
         setJobs(response.jobs);
+      } else {
+        console.error("Failed to load jobs:", response.error);
       }
     } catch (err) {
       console.error("Error loading jobs:", err);

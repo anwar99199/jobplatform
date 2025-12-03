@@ -3,15 +3,15 @@ import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { supabase } from "../utils/supabase/client";
-import { toast } from "sonner@2.0.3";
-import { projectId, publicAnonKey } from "../utils/supabase/info";
-import { initializeSmartBox, waitForSmartBox, PaymentCompleteData, PaymentErrorData } from "../utils/amwal-smartbox";
 
 export function PremiumPage() {
   const [isPremium, setIsPremium] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
-  const [loading, setLoading] = useState<"semiannual" | "yearly" | null>(null);
-  const [redirecting, setRedirecting] = useState(false);
+
+  // Payment system disabled - subscriptions are "Coming Soon"
+  useEffect(() => {
+    console.log("ℹ️ Payment system disabled - Premium subscriptions coming soon");
+  }, []);
 
   // التحقق من حالة الاشتراك
   useEffect(() => {
@@ -45,124 +45,7 @@ export function PremiumPage() {
     }
   };
 
-  const handleSelectPlan = async (planType: "semiannual" | "yearly") => {
-    try {
-      setLoading(planType);
 
-      // Check if user is logged in
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        toast.error("يرجى تسجيل الدخول أولاً");
-        setLoading(null);
-        window.location.href = "/login";
-        return;
-      }
-
-      const userId = session.user.id;
-      const userEmail = session.user.email || "";
-      const userName = session.user.user_metadata?.name || "";
-
-      // حفظ معلومات الباقة المختارة في localStorage
-      localStorage.setItem("selectedPlan", planType);
-
-      // Wait for SmartBox to load (if not already loaded)
-      console.log("🔄 Checking SmartBox availability...");
-      const smartBoxLoaded = await waitForSmartBox(5000); // Wait up to 5 seconds
-      
-      if (!smartBoxLoaded) {
-        toast.error("نظام الدفع غير محمّل. يرجى إعادة تحميل الصفحة.");
-        setLoading(null);
-        return;
-      }
-
-      console.log("✅ SmartBox is available");
-      toast.info("جاري تحضير نافذة الدفع...");
-
-      // Initialize SmartBox with callbacks
-      const result = await initializeSmartBox(
-        planType,
-        userId,
-        userEmail,
-        userName,
-        // Success callback
-        async (paymentData: PaymentCompleteData) => {
-          console.log("✅ Payment completed:", paymentData);
-          
-          // Show loading overlay
-          setRedirecting(true);
-          toast.success("تم الدفع بنجاح! جاري تفعيل اشتراكك...");
-          
-          // Verify payment on server and activate subscription
-          try {
-            const verifyResponse = await fetch(
-              `https://${projectId}.supabase.co/functions/v1/make-server-8a20c00b/payment/verify`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${publicAnonKey}`
-                },
-                body: JSON.stringify({
-                  transactionRef: paymentData.MerchantReference,
-                  transactionId: paymentData.TransactionId,
-                  userId: userId
-                })
-              }
-            );
-
-            const verifyData = await verifyResponse.json();
-            
-            if (verifyData.success) {
-              toast.success("تم تفعيل اشتراكك بنجاح!");
-              // Redirect to success page
-              window.location.href = "/payment/success";
-            } else {
-              toast.error("تم الدفع ولكن حدث خطأ في التفعيل. يرجى التواصل مع الدعم.");
-              setRedirecting(false);
-              setLoading(null);
-            }
-          } catch (error) {
-            console.error("Error verifying payment:", error);
-            toast.error("حدث خطأ في التحقق من الدفع. يرجى التواصل مع الدعم.");
-            setRedirecting(false);
-            setLoading(null);
-          }
-        },
-        // Error callback
-        (errorData: PaymentErrorData) => {
-          console.error("❌ Payment error:", errorData);
-          toast.error(`فشل الدفع: ${errorData.ErrorMessage || "خطأ غير معروف"}`);
-          setLoading(null);
-        },
-        // Cancel callback
-        () => {
-          console.log("⚠️ Payment cancelled by user");
-          toast.warning("تم إلغاء عملية الدفع");
-          setLoading(null);
-        }
-      );
-
-      if (!result.success) {
-        toast.error(result.error || "فشل تهيئة نظام الدفع");
-        setLoading(null);
-        return;
-      }
-
-      // If sandbox mode, show info
-      if (result.sandboxMode) {
-        toast.info("🎭 وضع التجربة - لن يتم خصم أي مبلغ حقيقي");
-      }
-
-      // Loading will be cleared by callbacks
-      console.log("✅ SmartBox initialized successfully");
-
-    } catch (error) {
-      console.error("Error:", error);
-      toast.error("حدث خطأ أثناء معالجة طلبك");
-      setLoading(null);
-    }
-  };
 
   const premiumFeatures = [
     {
@@ -189,7 +72,7 @@ export function PremiumPage() {
     },
     {
       icon: <TrendingUp className="w-16 h-16 text-red-600" />,
-      title: "نسبة التوافق مع الوظائف",
+      title: "نسبة التو��فق مع الوظائف",
       description: "اعرف مدى توافقك مع كل وظيفة قبل التقديم بتحليل ذكي دقيق",
       features: [
         "تحليل دقيق للتوافق مع متطلبات الوظيفة",
@@ -340,29 +223,6 @@ export function PremiumPage() {
   // Non-Premium User View - عرض كامل مع الباقات
   return (
     <div className="container mx-auto px-4 py-12">
-      {/* Redirecting Overlay */}
-      {redirecting && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl p-8 max-w-md mx-4 text-center shadow-2xl">
-            <div className="flex justify-center mb-6">
-              <div className="relative">
-                <div className="w-20 h-20 border-4 border-red-200 border-t-red-600 rounded-full animate-spin"></div>
-                <Crown className="w-10 h-10 text-red-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
-              </div>
-            </div>
-            <h2 className="text-2xl mb-3 text-gray-800">جاري التحويل إلى صفحة الدفع</h2>
-            <p className="text-gray-600">
-              يرجى الانتظار بينما نقوم بتحضير صفحة الدفع الآمنة...
-            </p>
-            <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-500">
-              <div className="w-2 h-2 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-              <div className="w-2 h-2 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-              <div className="w-2 h-2 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Hero Section */}
       <div className="text-center mb-16">
         <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full mb-6">
@@ -454,15 +314,14 @@ export function PremiumPage() {
               </ul>
 
               <Button
-                className={`w-full py-6 ${
+                className={`w-full py-6 cursor-not-allowed ${
                   plan.popular
-                    ? "bg-white text-red-600 hover:bg-gray-100"
-                    : "bg-red-600 text-white hover:bg-red-700"
-                }`}
-                onClick={() => handleSelectPlan(plan.planType)}
-                disabled={loading === plan.planType}
+                    ? "bg-white text-red-600"
+                    : "bg-red-600 text-white"
+                } opacity-70`}
+                disabled
               >
-                {loading === plan.planType ? "جاري المعالجة..." : "شراء"}
+                قريباً
               </Button>
             </div>
           ))}
@@ -477,7 +336,7 @@ export function PremiumPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-xl mb-3 text-red-600">كيف يمكنني الاشتراك في الخدمة؟</h3>
             <p className="text-gray-700">
-              يمكنك اختيار الباقة المناسبة والضغط على زر "شراء"، ثم إكمال عملية الدفع الآمن.
+              يمكنك اختيار الباقة المناسبة والضغط على زر "اشترك الآن"، ثم إكمال عملية الدفع الآمن.
             </p>
           </div>
 

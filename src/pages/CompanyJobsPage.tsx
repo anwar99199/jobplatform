@@ -30,6 +30,8 @@ export function CompanyJobsPage() {
           (job: Job) => job.type !== "حكومي" && job.type !== "تدريب"
         );
         setJobs(companyJobs);
+      } else {
+        console.error("Failed to load jobs:", response.error);
       }
     } catch (err) {
       console.error("Error loading jobs:", err);

@@ -31,7 +31,10 @@ export function JobsSection() {
   const loadJobs = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
       const response = await getJobs();
+      
       if (response.success) {
         const allJobs = response.jobs;
         setJobs(allJobs);
@@ -44,11 +47,12 @@ export function JobsSection() {
         setTodayJobs(todayJobsList);
         setPreviousJobs(previousJobsList);
       } else {
-        setError("فشل في تحميل الوظائف");
+        console.error("Failed to load jobs:", response.error);
+        setError("فشل في تحميل الوظائف. يرجى إعادة تحميل الصفحة.");
       }
     } catch (err) {
       console.error("Error loading jobs:", err);
-      setError("حدث خطأ أثناء تحميل الوظائف");
+      setError("حدث خطأ في الاتصال بقاعدة البيانات. يرجى التحقق من اتصال الإنترنت.");
     } finally {
       setLoading(false);
     }
@@ -71,8 +75,15 @@ export function JobsSection() {
   if (error) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="border border-gray-300 rounded-lg p-8 bg-white text-center">
-          <p className="text-red-600">{error}</p>
+        <div className="border border-red-200 rounded-lg p-8 bg-red-50 text-center">
+          <p className="text-red-700 mb-4">{error}</p>
+          <Button 
+            onClick={() => loadJobs()} 
+            variant="outline"
+            className="mt-2"
+          >
+            إعادة المحاولة
+          </Button>
         </div>
       </div>
     );

@@ -40,7 +40,7 @@ export function PrivacyPolicyPage() {
             نجمع أنواعًا محدودة من البيانات بهدف تحسين تجربتك وتقديم الخدمات بكفاءة:
           </p>
 
-          {/* أ. بيانات المستخدم المباشرة */}
+          {/* أ. بيانات المستخدم ا��مباشرة */}
           <div className="mb-6">
             <h3 className="text-xl mb-3 text-gray-800">أ. بيانات يقدمها المستخدم مباشرة</h3>
             <ul className="list-disc list-inside space-y-2 text-gray-700 mr-4">
@@ -59,7 +59,7 @@ export function PrivacyPolicyPage() {
             <ul className="list-disc list-inside space-y-2 text-gray-700 mr-4">
               <li>عنوان IP</li>
               <li>نوع الجهاز والمتصفح</li>
-              <li>الصفحات التي يتم زيارتها داخل المنصة</li>
+              <li>الصفحات التي ��تم زيارتها داخل المنصة</li>
               <li>الوقت والتاريخ ومدة الاستخدام</li>
             </ul>
           </div>
@@ -70,7 +70,7 @@ export function PrivacyPolicyPage() {
               <Lock className="w-6 h-6 text-red-600" />
               ج. بيانات الدفع
             </h3>
-            <p className="text-gray-700 mb-3">عند شراء اشتراك:</p>
+            <p className="text-gray-700 mb-3">عند الاشتراك في الخدمة:</p>
             <ul className="list-disc list-inside space-y-2 text-gray-700 mr-4">
               <li className="text-red-700 font-medium">لا نقوم بتخزين بيانات البطاقة</li>
               <li>ستتم عمليات الدفع عبر بوابة دفع مرخصة وآمنة (عند التفعيل)</li>

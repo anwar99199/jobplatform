@@ -20,20 +20,39 @@ const toCamelCase = (obj: any) => {
 // Get all jobs from Supabase
 export async function getJobs() {
   try {
+    console.log('📡 Fetching jobs from Supabase...');
     const { data, error } = await supabase
       .from('jobs')
       .select('*')
       .order('date', { ascending: false });
     
     if (error) {
-      console.error('Error fetching jobs:', error);
-      return { success: false, jobs: [] };
+      console.error('❌ Supabase error fetching jobs:', error);
+      console.error('Error details:', {
+        message: error.message,
+        hint: error.hint,
+        code: error.code
+      });
+      return { success: false, jobs: [], error: error.message };
     }
     
+    console.log(`✅ Successfully fetched ${data?.length || 0} jobs`);
     return { success: true, jobs: toCamelCase(data) };
   } catch (error) {
-    console.error('Error fetching jobs:', error);
-    return { success: false, jobs: [] };
+    console.error('❌ Error fetching jobs:', error);
+    console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error);
+    console.error('Error message:', error instanceof Error ? error.message : String(error));
+    
+    // Check if it's a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('🌐 Network error: Cannot reach Supabase. Please check:');
+      console.error('   1. Internet connection');
+      console.error('   2. Supabase project is running');
+      console.error('   3. CORS settings');
+      console.error('   4. Firewall/Network restrictions');
+    }
+    
+    return { success: false, jobs: [], error: String(error) };
   }
 }
 
