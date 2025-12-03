@@ -919,9 +919,7 @@ app.post("/make-server-8a20c00b/admin/users/:userId/premium", async (c) => {
           plan_type: planType,
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
-          status: 'active',
-          payment_method: 'admin',
-          payment_status: 'completed'
+          status: 'active'
         });
       
       if (insertError) {
