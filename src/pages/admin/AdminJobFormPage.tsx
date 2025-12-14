@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea";
-import { ArrowRight, Save, ListChecks } from "lucide-react";
+import { ArrowRight, Save } from "lucide-react";
 import { getJob, createJob, updateJob } from "../../utils/adminApi";
 
 export function AdminJobFormPage() {
@@ -15,12 +15,8 @@ export function AdminJobFormPage() {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
-    company: "",
-    location: "",
-    type: "",
-    description: "",
-    requirements: "",
     applicationUrl: "",
+    description: "",
     date: new Date().toISOString().split('T')[0]
   });
 
@@ -43,12 +39,8 @@ export function AdminJobFormPage() {
       if (response.success && response.job) {
         setFormData({
           title: response.job.title || "",
-          company: response.job.company || "",
-          location: response.job.location || "",
-          type: response.job.type || "",
-          description: response.job.description || "",
-          requirements: response.job.requirements || "",
           applicationUrl: response.job.applicationUrl || "",
+          description: response.job.description || "",
           date: response.job.date || new Date().toISOString().split('T')[0]
         });
       }
@@ -126,60 +118,6 @@ export function AdminJobFormPage() {
               />
             </div>
 
-            {/* Company */}
-            <div className="space-y-2">
-              <Label htmlFor="company">اسم الشركة *</Label>
-              <Input
-                id="company"
-                name="company"
-                type="text"
-                value={formData.company}
-                onChange={handleChange}
-                placeholder="مثال: شركة التكنولوجيا المتقدمة"
-                required
-              />
-            </div>
-
-            {/* Location */}
-            <div className="space-y-2">
-              <Label htmlFor="location">الموقع *</Label>
-              <Input
-                id="location"
-                name="location"
-                type="text"
-                value={formData.location}
-                onChange={handleChange}
-                placeholder="مثال: مسقط، عُمان"
-                required
-              />
-            </div>
-
-            {/* Job Type */}
-            <div className="space-y-2">
-              <Label htmlFor="type">نوع الوظيفة</Label>
-              <Input
-                id="type"
-                name="type"
-                type="text"
-                value={formData.type}
-                onChange={handleChange}
-                placeholder="مثال: دوام كامل، دوام جزئي، عن بعد"
-              />
-            </div>
-
-            {/* Date */}
-            <div className="space-y-2">
-              <Label htmlFor="date">تاريخ النشر</Label>
-              <Input
-                id="date"
-                name="date"
-                type="date"
-                value={formData.date}
-                onChange={handleChange}
-                dir="ltr"
-              />
-            </div>
-
             {/* Application URL */}
             <div className="space-y-2">
               <Label htmlFor="applicationUrl">رابط التقديم (اختياري)</Label>
@@ -197,6 +135,19 @@ export function AdminJobFormPage() {
               </p>
             </div>
 
+            {/* Date */}
+            <div className="space-y-2">
+              <Label htmlFor="date">تاريخ النشر</Label>
+              <Input
+                id="date"
+                name="date"
+                type="date"
+                value={formData.date}
+                onChange={handleChange}
+                dir="ltr"
+              />
+            </div>
+
             {/* Description */}
             <div className="space-y-2">
               <Label htmlFor="description">وصف الوظيفة *</Label>
@@ -209,25 +160,6 @@ export function AdminJobFormPage() {
                 rows={10}
                 required
               />
-            </div>
-
-            {/* Requirements */}
-            <div className="space-y-2">
-              <Label htmlFor="requirements" className="flex items-center gap-2">
-                <ListChecks className="w-5 h-5 text-red-600" />
-                متطلبات الوظيفة (اختياري)
-              </Label>
-              <Textarea
-                id="requirements"
-                name="requirements"
-                value={formData.requirements}
-                onChange={handleChange}
-                placeholder="اكتب كل متطلب في سطر منفصل:&#10;• بكالوريوس في علوم الحاسوب&#10;• خبرة 3 سنوات في المجال&#10;• إتقان اللغة الإنجليزية&#10;• مهارات العمل الجماعي"
-                rows={6}
-              />
-              <p className="text-xs text-gray-500">
-                يمكنك كتابة كل متطلب في سطر منفصل، وسيتم عرضها كقائمة منقطة في صفحة الوظيفة
-              </p>
             </div>
 
             {/* Buttons */}

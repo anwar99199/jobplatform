@@ -244,21 +244,21 @@ app.put("/make-server-8a20c00b/admin/jobs/:id", async (c) => {
   try {
     const id = c.req.param("id");
     const body = await c.req.json();
-    const { title, company, location, type, description, requirements, date, applicationUrl } = body;
+    const { title, description, date, applicationUrl } = body;
     
-    console.log("Updating job:", id, { title, company });
+    console.log("Updating job:", id, { title });
     
-    if (!title || !company) {
-      return c.json({ success: false, message: "العنوان واسم الشركة مطلوبا��" }, 400);
+    if (!title) {
+      return c.json({ success: false, message: "العنوان مطلوب" }, 400);
     }
     
     const jobData = {
       title,
-      company,
-      location: location || "مسقط",
-      type: type || "دوام كامل",
+      company: "غير محدد",
+      location: "عُمان",
+      type: "غير محدد",
       description: description || "",
-      requirements: requirements || "",
+      requirements: "",
       application_url: applicationUrl || "",
       date: date || new Date().toISOString().split("T")[0]
     };
@@ -531,21 +531,21 @@ app.post("/make-server-8a20c00b/admin/register", async (c) => {
 app.post("/make-server-8a20c00b/admin/jobs", async (c) => {
   try {
     const body = await c.req.json();
-    const { title, company, location, type, description, requirements, date, applicationUrl } = body;
+    const { title, description, date, applicationUrl } = body;
     
-    console.log("Creating job with data:", { title, company, location, type });
+    console.log("Creating job with data:", { title });
     
-    if (!title || !company) {
-      return c.json({ success: false, message: "اعنوان واسم الشركة مطلوبان" }, 400);
+    if (!title) {
+      return c.json({ success: false, message: "العنوان مطلوب" }, 400);
     }
     
     const jobData = {
       title,
-      company,
-      location: location || "مسقط",
-      type: type || "دوام كامل",
+      company: "غير محدد",
+      location: "عُمان",
+      type: "غير محدد",
       description: description || "",
-      requirements: requirements || "",
+      requirements: "",
       application_url: applicationUrl || "",
       date: date || new Date().toISOString().split("T")[0]
     };
