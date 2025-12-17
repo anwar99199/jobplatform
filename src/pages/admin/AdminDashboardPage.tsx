@@ -10,7 +10,8 @@ import {
   Plus,
   BarChart3,
   Newspaper,
-  MessageSquare
+  MessageSquare,
+  Download
 } from "lucide-react";
 import { getAdminStats } from "../../utils/adminApi";
 
@@ -89,6 +90,7 @@ export function AdminDashboardPage() {
 
   const quickActions = [
     { title: "إدارة الوظائف", desc: "إضافة، تعديل وحذف الوظائف", icon: Briefcase, path: "/admin/jobs" },
+    { title: "جلب الوظائف تلقائياً", desc: "استيراد وظائف من مواقع خارجية", icon: Download, path: "/admin/scraper" },
     { title: "إدارة الأخبار", desc: "إضافة وتعديل أخبار سوق العمل", icon: Newspaper, path: "/admin/news" },
     { title: "رسائل التواصل", desc: "عرض ومتابعة رسائل المستخدمين", icon: MessageSquare, path: "/admin/contact" },
     { title: "إدارة المستخدمين", desc: "إدارة حسابات المستخدمين", icon: Users, path: "/admin/users" },

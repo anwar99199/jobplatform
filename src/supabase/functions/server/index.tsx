@@ -4,6 +4,7 @@ import { logger } from "npm:hono/logger";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as kv from "./kv_store.tsx";
 import { extractPDFText, extractDOCXText } from "./pdf-extractor.tsx";
+import { scrapeJobsOfOman, scrapeWebsite } from "./job-scraper.tsx";
 
 const app = new Hono();
 
@@ -177,32 +178,26 @@ app.get("/make-server-8a20c00b/jobs/:id", async (c) => {
   }
 });
 
-// Add new job
+// Add new job (Legacy endpoint - not used, but keeping for compatibility)
 app.post("/make-server-8a20c00b/jobs", async (c) => {
   try {
     const body = await c.req.json();
-    const { title, company, location, type, description, requirements, applicationUrl } = body;
+    const { title, description, applicationUrl } = body;
     
-    if (!title || !company) {
-      return c.json({ success: false, error: "Title and company are required" }, 400);
+    if (!title) {
+      return c.json({ success: false, error: "Title is required" }, 400);
     }
     
-    const id = Date.now().toString();
     const job = {
-      id,
       title,
-      company,
-      location: location || "مسقط",
-      type: type || "دوام كامل",
       description: description || "",
-      requirements: requirements || "",
-      applicationUrl: applicationUrl || "",
+      application_url: applicationUrl || "",
       date: new Date().toISOString().split("T")[0]
     };
     
     const { data, error } = await supabase
       .from('jobs')
-      .insert(toSnakeCase(job))
+      .insert([job])
       .select('*')
       .single();
     
@@ -254,11 +249,7 @@ app.put("/make-server-8a20c00b/admin/jobs/:id", async (c) => {
     
     const jobData = {
       title,
-      company: "غير محدد",
-      location: "عُمان",
-      type: "غير محدد",
       description: description || "",
-      requirements: "",
       application_url: applicationUrl || "",
       date: date || new Date().toISOString().split("T")[0]
     };
@@ -541,11 +532,7 @@ app.post("/make-server-8a20c00b/admin/jobs", async (c) => {
     
     const jobData = {
       title,
-      company: "غير محدد",
-      location: "عُمان",
-      type: "غير محدد",
       description: description || "",
-      requirements: "",
       application_url: applicationUrl || "",
       date: date || new Date().toISOString().split("T")[0]
     };
@@ -590,6 +577,238 @@ app.delete("/make-server-8a20c00b/admin/jobs/:id", async (c) => {
   } catch (error) {
     console.error("Error deleting job:", error);
     return c.json({ success: false, message: "فشل في حذف الوظيفة" }, 500);
+  }
+});
+
+// Scrape jobs from external website (Admin only)
+app.post("/make-server-8a20c00b/admin/scrape-jobs", async (c) => {
+  const startTime = Date.now(); // Track execution time
+  
+  try {
+    const body = await c.req.json();
+    const sourceUrl = body.sourceUrl || 'https://jobsofoman.com/ar/index.php';
+    
+    console.log(`Starting job scraping from: ${sourceUrl}`);
+    
+    // Scrape jobs from the website
+    const scrapedJobs = await scrapeJobsOfOman();
+    
+    if (!scrapedJobs || scrapedJobs.length === 0) {
+      // Log failed scrape attempt
+      await supabase.from('scraping_logs').insert({
+        scrape_date: new Date().toISOString(),
+        jobs_scraped: 0,
+        jobs_added: 0,
+        jobs_duplicated: 0,
+        source: 'jobsofoman.com',
+        status: 'success',
+        error_message: 'No jobs found on website',
+        execution_time_ms: Date.now() - startTime
+      });
+      
+      return c.json({ 
+        success: false, 
+        message: "لم يتم العثور على وظائف في الموقع",
+        jobsScraped: 0,
+        jobsAdded: 0
+      });
+    }
+    
+    console.log(`Found ${scrapedJobs.length} jobs, now checking for duplicates...`);
+    
+    // Get existing jobs to avoid duplicates
+    const { data: existingJobs } = await supabase
+      .from('jobs')
+      .select('title, application_url');
+    
+    const existingTitles = new Set(
+      (existingJobs || []).map((job: any) => job.title.toLowerCase().trim())
+    );
+    const existingUrls = new Set(
+      (existingJobs || []).map((job: any) => job.application_url)
+    );
+    
+    // Filter out duplicates
+    const newJobs = scrapedJobs.filter(job => {
+      const titleLower = job.title.toLowerCase().trim();
+      const isDuplicate = existingTitles.has(titleLower) || existingUrls.has(job.applicationUrl);
+      return !isDuplicate;
+    });
+    
+    console.log(`After filtering duplicates: ${newJobs.length} new jobs to add`);
+    
+    const duplicatesCount = scrapedJobs.length - newJobs.length;
+    
+    if (newJobs.length === 0) {
+      // Log scrape with no new jobs
+      await supabase.from('scraping_logs').insert({
+        scrape_date: new Date().toISOString(),
+        jobs_scraped: scrapedJobs.length,
+        jobs_added: 0,
+        jobs_duplicated: duplicatesCount,
+        source: 'jobsofoman.com',
+        status: 'success',
+        execution_time_ms: Date.now() - startTime
+      });
+      
+      return c.json({ 
+        success: true, 
+        message: "لم يتم إضافة وظائف جديدة. جميع الوظائف موجودة بالفعل",
+        jobsScraped: scrapedJobs.length,
+        jobsAdded: 0,
+        jobsDuplicated: duplicatesCount,
+        jobs: []
+      });
+    }
+    
+    // Insert new jobs into database
+    const jobsToInsert = newJobs.map(job => ({
+      title: job.title,
+      description: job.description,
+      application_url: job.applicationUrl,
+      date: job.date,
+      source: 'jobsofoman.com' // Add source field
+    }));
+    
+    const { data: insertedJobs, error: insertError } = await supabase
+      .from('jobs')
+      .insert(jobsToInsert)
+      .select('*');
+    
+    if (insertError) {
+      console.error("Error inserting scraped jobs:", insertError);
+      
+      // Log failed insertion
+      await supabase.from('scraping_logs').insert({
+        scrape_date: new Date().toISOString(),
+        jobs_scraped: scrapedJobs.length,
+        jobs_added: 0,
+        jobs_duplicated: duplicatesCount,
+        source: 'jobsofoman.com',
+        status: 'failed',
+        error_message: `Database insertion error: ${insertError.message}`,
+        execution_time_ms: Date.now() - startTime
+      });
+      
+      return c.json({ 
+        success: false, 
+        message: "فشل في حفظ الوظائف في قاعدة البيانات",
+        error: insertError.message
+      }, 500);
+    }
+    
+    console.log(`Successfully added ${insertedJobs?.length || 0} jobs`);
+    
+    // Log successful scrape
+    await supabase.from('scraping_logs').insert({
+      scrape_date: new Date().toISOString(),
+      jobs_scraped: scrapedJobs.length,
+      jobs_added: insertedJobs?.length || 0,
+      jobs_duplicated: duplicatesCount,
+      source: 'jobsofoman.com',
+      status: 'success',
+      execution_time_ms: Date.now() - startTime
+    });
+    
+    return c.json({ 
+      success: true, 
+      message: `تم جلب وإضافة ${insertedJobs?.length || 0} وظيفة جديدة بنجاح`,
+      jobsScraped: scrapedJobs.length,
+      jobsAdded: insertedJobs?.length || 0,
+      jobsDuplicated: duplicatesCount,
+      executionTimeMs: Date.now() - startTime,
+      jobs: toCamelCase(insertedJobs)
+    });
+  } catch (error) {
+    console.error("Error scraping jobs:", error);
+    
+    // Log error
+    try {
+      await supabase.from('scraping_logs').insert({
+        scrape_date: new Date().toISOString(),
+        jobs_scraped: 0,
+        jobs_added: 0,
+        jobs_duplicated: 0,
+        source: 'jobsofoman.com',
+        status: 'failed',
+        error_message: String(error),
+        execution_time_ms: Date.now() - startTime
+      });
+    } catch (logError) {
+      console.error("Error logging to scraping_logs:", logError);
+    }
+    
+    return c.json({ 
+      success: false, 
+      message: "حدث خطأ أثناء جلب الوظائف من الموقع",
+      error: String(error)
+    }, 500);
+  }
+});
+
+// Get scraping logs (Admin only)
+app.get("/make-server-8a20c00b/admin/scraping-logs", async (c) => {
+  try {
+    const limit = c.req.query('limit') || '20';
+    
+    // Get recent scraping logs
+    const { data: logs, error } = await supabase
+      .from('scraping_logs')
+      .select('*')
+      .order('scrape_date', { ascending: false })
+      .limit(parseInt(limit));
+    
+    if (error) {
+      console.error("Error fetching scraping logs:", error);
+      return c.json({
+        success: false,
+        message: "فشل في جلب سجلات العمليات",
+        logs: []
+      }, 500);
+    }
+    
+    return c.json({
+      success: true,
+      logs: toCamelCase(logs)
+    });
+  } catch (error) {
+    console.error("Error fetching scraping logs:", error);
+    return c.json({
+      success: false,
+      message: "حدث خطأ أثناء جلب السجلات",
+      logs: []
+    }, 500);
+  }
+});
+
+// Get scraping statistics (Admin only)
+app.get("/make-server-8a20c00b/admin/scraping-stats", async (c) => {
+  try {
+    // Get statistics from the scraping_stats view
+    const { data: stats, error } = await supabase
+      .from('scraping_stats')
+      .select('*');
+    
+    if (error) {
+      console.error("Error fetching scraping stats:", error);
+      return c.json({
+        success: false,
+        message: "فشل في جلب إحصائيات الجلب",
+        stats: []
+      }, 500);
+    }
+    
+    return c.json({
+      success: true,
+      stats: toCamelCase(stats)
+    });
+  } catch (error) {
+    console.error("Error fetching scraping stats:", error);
+    return c.json({
+      success: false,
+      message: "حدث خطأ أثناء جلب الإحصائيات",
+      stats: []
+    }, 500);
   }
 });
 

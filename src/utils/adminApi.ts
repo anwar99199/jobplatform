@@ -152,9 +152,6 @@ export const createJob = async (jobData: any) => {
       headers: getAdminHeaders(),
       body: JSON.stringify({
         title: jobData.title,
-        company: jobData.company,
-        location: jobData.location || 'مسقط',
-        type: jobData.type || 'دوام كامل',
         description: jobData.description || '',
         applicationUrl: jobData.applicationUrl || '',
         date: jobData.date || new Date().toISOString().split('T')[0]
@@ -183,9 +180,6 @@ export const updateJob = async (id: string, jobData: any) => {
       headers: getAdminHeaders(),
       body: JSON.stringify({
         title: jobData.title,
-        company: jobData.company,
-        location: jobData.location || 'مسقط',
-        type: jobData.type || 'دوام كامل',
         description: jobData.description || '',
         applicationUrl: jobData.applicationUrl || '',
         date: jobData.date || new Date().toISOString().split('T')[0]
@@ -345,6 +339,28 @@ export const getAnalytics = async (timeRange: "7days" | "30days" | "90days" = "3
         topJobs: [],
         recentActivity: []
       }
+    };
+  }
+};
+
+// Scrape Jobs from External Website
+export const scrapeJobs = async (sourceUrl?: string) => {
+  try {
+    const response = await fetch(`${API_URL}/admin/scrape-jobs`, {
+      method: 'POST',
+      headers: getAdminHeaders(),
+      body: JSON.stringify({ sourceUrl: sourceUrl || 'https://jobsofoman.com/ar/index.php' })
+    });
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Scrape jobs error:', error);
+    return { 
+      success: false, 
+      message: 'فشل الاتصال بالسيرفر',
+      jobsScraped: 0,
+      jobsAdded: 0
     };
   }
 };

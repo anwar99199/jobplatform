@@ -27,6 +27,7 @@ import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminAnalyticsPage } from "./pages/admin/AdminAnalyticsPage";
 import { AdminNewsPage } from "./pages/admin/AdminNewsPage";
 import { AdminContactPage } from "./pages/admin/AdminContactPage";
+import { AdminScraperPage } from "./pages/admin/AdminScraperPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
 import { TermsOfServicePage } from "./pages/TermsOfServicePage";
@@ -97,6 +98,7 @@ export default function App() {
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/jobs" element={<AdminJobsPage />} />
           <Route path="/admin/jobs/:id" element={<AdminJobFormPage />} />
+          <Route path="/admin/scraper" element={<AdminScraperPage />} />
           <Route path="/admin/news" element={<AdminNewsPage />} />
           <Route path="/admin/contact" element={<AdminContactPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
